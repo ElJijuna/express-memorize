@@ -5,44 +5,55 @@ export interface MemorizeOptions {
   ttl?: number;
 }
 
-export interface MemorizeMiddleware extends RequestHandler {
+export interface MemorizeCallOptions {
+  ttl?: number;
+}
+
+export interface Memorize {
+  (options?: MemorizeCallOptions): RequestHandler;
   get(key: string): CacheInfo | null;
   getAll(): Record<string, CacheInfo>;
   delete(key: string): boolean;
   clear(): void;
 }
 
-export function memorize(options: MemorizeOptions = {}): MemorizeMiddleware {
+export function memorize(options: MemorizeOptions = {}): Memorize {
   const { ttl } = options;
   const store = new MemorizeStore();
 
-  const middleware = function (req: Request, res: Response, next: NextFunction): void {
-    const key = req.originalUrl;
-    const cached = store.getRaw(key);
+  const cache = function (callOptions?: MemorizeCallOptions): RequestHandler {
+    const effectiveTtl = callOptions?.ttl ?? ttl;
 
-    if (cached) {
-      res.setHeader('X-Cache', 'HIT');
-      res.status(cached.statusCode).json(cached.body);
-      return;
-    }
+    return function (req: Request, res: Response, next: NextFunction): void {
+      const key = req.originalUrl;
+      const cached = store.getRaw(key);
 
-    const originalJson = res.json.bind(res) as (body: unknown) => Response;
-
-    res.json = function (body: unknown): Response {
-      if (res.statusCode >= 200 && res.statusCode < 300) {
-        store.set(key, { body, statusCode: res.statusCode }, ttl);
+      if (cached) {
+        res.setHeader('X-Cache', 'HIT');
+        res.setHeader('Content-Type', cached.contentType);
+        res.status(cached.statusCode).send(cached.body);
+        return;
       }
-      res.setHeader('X-Cache', 'MISS');
-      return originalJson(body);
+
+      const originalSend = res.send.bind(res) as (body?: unknown) => Response;
+
+      res.send = function (body?: unknown): Response {
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          const contentType = (res.getHeader('Content-Type') as string) ?? 'application/octet-stream';
+          store.set(key, { body, statusCode: res.statusCode, contentType }, effectiveTtl);
+        }
+        res.setHeader('X-Cache', 'MISS');
+        return originalSend(body);
+      };
+
+      next();
     };
+  } as Memorize;
 
-    next();
-  } as MemorizeMiddleware;
+  cache.get = (key: string) => store.get(key);
+  cache.getAll = () => store.getAll();
+  cache.delete = (key: string) => store.delete(key);
+  cache.clear = () => store.clear();
 
-  middleware.get = (key: string) => store.get(key);
-  middleware.getAll = () => store.getAll();
-  middleware.delete = (key: string) => store.delete(key);
-  middleware.clear = () => store.clear();
-
-  return middleware;
+  return cache;
 }

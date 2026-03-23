@@ -1,6 +1,7 @@
 export interface CacheEntry {
   body: unknown;
   statusCode: number;
+  contentType: string;
   expiresAt: number | null;
 }
 
@@ -9,11 +10,12 @@ export interface CacheInfo extends CacheEntry {
   remainingTtl: number | null;
 }
 
+
 export class MemorizeStore {
   private _store = new Map<string, CacheEntry>();
   private _timers = new Map<string, ReturnType<typeof setTimeout>>();
 
-  set(key: string, entry: Omit<CacheEntry, 'expiresAt'>, ttl?: number): void {
+  set(key: string, entry: Omit<CacheEntry, 'expiresAt'>, ttl?: number | null): void {
     if (this._timers.has(key)) {
       clearTimeout(this._timers.get(key)!);
       this._timers.delete(key);
@@ -96,6 +98,7 @@ export class MemorizeStore {
       key,
       body: entry.body,
       statusCode: entry.statusCode,
+      contentType: entry.contentType,
       expiresAt: entry.expiresAt,
       remainingTtl: entry.expiresAt ? Math.max(0, entry.expiresAt - Date.now()) : null,
     };
