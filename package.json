@@ -1,0 +1,21 @@
+{
+  "name": "express-memorize",
+  "version": "1.0.0",
+  "description": "Express.js in-memory cache middleware with TTL support",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "keywords": ["express", "middleware", "cache", "memory", "ttl"],
+  "license": "MIT",
+  "peerDependencies": {
+    "express": ">=4.0.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  }
+}
