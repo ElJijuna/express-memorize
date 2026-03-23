@@ -1,10 +1,11 @@
-import { Request, Response, NextFunction } from 'express';
+import { Request, NextFunction } from 'express';
 import { memorize } from '../memorize';
 
 function createMockReqRes(url = '/test') {
   const responseHeaders: Record<string, string> = {};
 
-  const res = {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const res: any = {
     statusCode: 200,
     status(code: number) {
       this.statusCode = code;
@@ -18,7 +19,7 @@ function createMockReqRes(url = '/test') {
       return responseHeaders[name];
     },
     send: jest.fn().mockReturnThis(),
-  } as unknown as Response;
+  };
 
   // Simulate Express's res.json: sets Content-Type then calls res.send
   (res as any).json = function (body: unknown) {

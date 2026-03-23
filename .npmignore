@@ -1,0 +1,5 @@
+src/
+test-client/
+.github/
+*.test.ts
+tsconfig.json

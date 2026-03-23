@@ -4,11 +4,15 @@
   "description": "Express.js in-memory cache middleware with TTL support",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
     "test": "jest",
-    "test:watch": "jest --watch"
+    "test:watch": "jest --watch",
+    "prepublishOnly": "npm test && npm run build"
   },
   "jest": {
     "preset": "ts-jest",
