@@ -6,6 +6,18 @@ app.use(express.json());
 
 const cache = memorize({ ttl: 30_000 }); // TTL global: 30s
 
+cache.on('set', (e) => {
+  console.log(`[cache:set]    ${e.key} — status ${e.statusCode} | ttl: ${e.expiresAt ? `${e.expiresAt - Date.now()}ms` : 'none'}`);
+});
+
+cache.on('delete', (e) => {
+  console.log(`[cache:delete] ${e.key}`);
+});
+
+cache.on('expire', (e) => {
+  console.log(`[cache:expire] ${e.key}`);
+});
+
 // --- Fake data ---
 
 const users = [
