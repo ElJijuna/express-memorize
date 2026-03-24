@@ -84,8 +84,23 @@ export interface MemorizeExpireEvent {
   key: string;
 }
 
+/**
+ * Emitted when the last entry is removed from the cache, leaving it empty.
+ * Triggered after a `'delete'` or `'expire'` eviction.
+ *
+ * @example
+ * ```ts
+ * cache.on('empty', () => {
+ *   console.log('cache is now empty');
+ * });
+ * ```
+ */
+export interface MemorizeEmptyEvent {
+  type: 'empty';
+}
+
 /** Union of all possible cache events. */
-export type MemorizeEvent = MemorizeSetEvent | MemorizeDeleteEvent | MemorizeExpireEvent;
+export type MemorizeEvent = MemorizeSetEvent | MemorizeDeleteEvent | MemorizeExpireEvent | MemorizeEmptyEvent;
 
 /** The string literal union of supported event names. */
 export type MemorizeEventType = MemorizeEvent['type'];
@@ -94,6 +109,7 @@ type ListenerMap = {
   set: Array<(e: MemorizeSetEvent) => void>;
   delete: Array<(e: MemorizeDeleteEvent) => void>;
   expire: Array<(e: MemorizeExpireEvent) => void>;
+  empty: Array<(e: MemorizeEmptyEvent) => void>;
 };
 
 // ---------------------------------------------------------------------------
@@ -109,7 +125,7 @@ type ListenerMap = {
 export class MemorizeStore {
   private _store = new Map<string, CacheEntry>();
   private _timers = new Map<string, ReturnType<typeof setTimeout>>();
-  private _listeners: ListenerMap = { set: [], delete: [], expire: [] };
+  private _listeners: ListenerMap = { set: [], delete: [], expire: [], empty: [] };
 
   /**
    * Registers an event listener.
@@ -126,6 +142,7 @@ export class MemorizeStore {
   on(event: 'set', handler: (e: MemorizeSetEvent) => void): void;
   on(event: 'delete', handler: (e: MemorizeDeleteEvent) => void): void;
   on(event: 'expire', handler: (e: MemorizeExpireEvent) => void): void;
+  on(event: 'empty', handler: (e: MemorizeEmptyEvent) => void): void;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   on(event: MemorizeEventType, handler: (e: any) => void): void {
     this._listeners[event].push(handler);
@@ -247,6 +264,9 @@ export class MemorizeStore {
     }
     this._store.delete(key);
     this._emit(reason, { type: reason, key });
+    if (this._store.size === 0) {
+      this._emit('empty', { type: 'empty' });
+    }
   }
 
   private _emit(event: MemorizeEventType, payload: MemorizeEvent): void {
