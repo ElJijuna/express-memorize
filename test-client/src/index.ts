@@ -1,21 +1,25 @@
 import express from 'express';
-import { memorize } from '../../src';
+import { memorize, MemorizeEventType } from '../../src';
 
 const app = express();
 app.use(express.json());
 
 const cache = memorize({ ttl: 30_000 }); // TTL global: 30s
 
-cache.on('set', (e) => {
+cache.on(MemorizeEventType.Set, (e) => {
   console.log(`[cache:set]    ${e.key} — status ${e.statusCode} | ttl: ${e.expiresAt ? `${e.expiresAt - Date.now()}ms` : 'none'}`);
 });
 
-cache.on('delete', (e) => {
+cache.on(MemorizeEventType.Delete, (e) => {
   console.log(`[cache:delete] ${e.key}`);
 });
 
-cache.on('expire', (e) => {
+cache.on(MemorizeEventType.Expire, (e) => {
   console.log(`[cache:expire] ${e.key}`);
+});
+
+cache.on(MemorizeEventType.Empty, () => {
+  console.log('[cache:empty]  cache is now empty');
 });
 
 // --- Fake data ---
