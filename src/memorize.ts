@@ -5,6 +5,7 @@ import {
   MemorizeSetEvent,
   MemorizeDeleteEvent,
   MemorizeExpireEvent,
+  MemorizeEmptyEvent,
 } from './MemorizeStore';
 
 /**
@@ -163,6 +164,7 @@ export interface Memorize {
   on(event: 'set', handler: (e: MemorizeSetEvent) => void): void;
   on(event: 'delete', handler: (e: MemorizeDeleteEvent) => void): void;
   on(event: 'expire', handler: (e: MemorizeExpireEvent) => void): void;
+  on(event: 'empty', handler: (e: MemorizeEmptyEvent) => void): void;
 }
 
 /**

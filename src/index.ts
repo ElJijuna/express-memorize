@@ -8,4 +8,5 @@ export type {
   MemorizeSetEvent,
   MemorizeDeleteEvent,
   MemorizeExpireEvent,
+  MemorizeEmptyEvent,
 } from './MemorizeStore';

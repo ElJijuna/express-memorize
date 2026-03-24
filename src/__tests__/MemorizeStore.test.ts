@@ -58,6 +58,53 @@ describe('MemorizeStore', () => {
     });
   });
 
+  describe('empty event', () => {
+    it('fires when the last entry is deleted', () => {
+      const handler = jest.fn();
+      store.on('empty', handler);
+      store.set('/a', entry());
+      store.set('/b', entry());
+
+      store.delete('/a');
+      expect(handler).not.toHaveBeenCalled();
+
+      store.delete('/b');
+      expect(handler).toHaveBeenCalledTimes(1);
+      expect(handler).toHaveBeenCalledWith({ type: 'empty' });
+    });
+
+    it('fires when clear() empties the store', () => {
+      const handler = jest.fn();
+      store.on('empty', handler);
+      store.set('/a', entry());
+      store.set('/b', entry());
+      store.clear();
+
+      expect(handler).toHaveBeenCalledTimes(1);
+    });
+
+    it('fires when the last entry expires', () => {
+      jest.useFakeTimers();
+      const handler = jest.fn();
+      store.on('empty', handler);
+      store.set('/a', entry(), 500);
+      jest.advanceTimersByTime(600);
+
+      expect(handler).toHaveBeenCalledTimes(1);
+      jest.useRealTimers();
+    });
+
+    it('does not fire when the store still has entries', () => {
+      const handler = jest.fn();
+      store.on('empty', handler);
+      store.set('/a', entry());
+      store.set('/b', entry());
+      store.delete('/a');
+
+      expect(handler).not.toHaveBeenCalled();
+    });
+  });
+
   describe('delete', () => {
     it('removes an existing entry and returns true', () => {
       store.set('/users', entry());
