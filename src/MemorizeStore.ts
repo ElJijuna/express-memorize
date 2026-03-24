@@ -1,120 +1,29 @@
-/**
- * The raw data stored for a cached response.
- */
-export interface CacheEntry {
-  /** The serialized response body, as passed to `res.send()`. */
-  body: unknown;
-  /** HTTP status code of the cached response (e.g. `200`, `201`). */
-  statusCode: number;
-  /** Value of the `Content-Type` response header (e.g. `application/json; charset=utf-8`). */
-  contentType: string;
-  /** Unix timestamp (ms) at which the entry expires, or `null` if it never expires. */
-  expiresAt: number | null;
-}
+import { CacheEntry } from './domain/CacheEntry';
+import { CacheInfo } from './domain/CacheInfo';
+import { MemorizeEventType } from './domain/MemorizeEventType';
+import { MemorizeEvent } from './domain/MemorizeEvent';
+import { MemorizeSetEvent } from './domain/MemorizeSetEvent';
+import { MemorizeDeleteEvent } from './domain/MemorizeDeleteEvent';
+import { MemorizeExpireEvent } from './domain/MemorizeExpireEvent';
+import { MemorizeEmptyEvent } from './domain/MemorizeEmptyEvent';
 
-/**
- * A cache entry enriched with lookup metadata, returned by {@link Memorize.get} and
- * {@link Memorize.getAll}.
- */
-export interface CacheInfo extends CacheEntry {
-  /** The cache key — the full request path including query string (e.g. `/users?page=1`). */
-  key: string;
-  /** Milliseconds remaining until the entry expires. `null` if the entry has no TTL. */
-  remainingTtl: number | null;
-}
-
-// ---------------------------------------------------------------------------
-// Events
-// ---------------------------------------------------------------------------
-
-/**
- * Emitted when a new response is stored in the cache.
- *
- * @example
- * ```ts
- * cache.on('set', (e) => {
- *   console.log(`stored ${e.key} — status ${e.statusCode}`);
- * });
- * ```
- */
-export interface MemorizeSetEvent {
-  type: 'set';
-  /** The cache key (full request URL). */
-  key: string;
-  /** The stored response body. */
-  body: unknown;
-  /** HTTP status code of the stored response. */
-  statusCode: number;
-  /** `Content-Type` header value of the stored response. */
-  contentType: string;
-  /** Expiry timestamp in ms, or `null` if no TTL was set. */
-  expiresAt: number | null;
-}
-
-/**
- * Emitted when a cache entry is manually removed via {@link Memorize.delete} or
- * {@link Memorize.clear}.
- *
- * @example
- * ```ts
- * cache.on('delete', (e) => {
- *   console.log(`deleted ${e.key}`);
- * });
- * ```
- */
-export interface MemorizeDeleteEvent {
-  type: 'delete';
-  /** The cache key that was removed. */
-  key: string;
-}
-
-/**
- * Emitted when a cache entry is automatically removed after its TTL elapses.
- *
- * @example
- * ```ts
- * cache.on('expire', (e) => {
- *   console.log(`expired ${e.key}`);
- * });
- * ```
- */
-export interface MemorizeExpireEvent {
-  type: 'expire';
-  /** The cache key that expired. */
-  key: string;
-}
-
-/**
- * Emitted when the last entry is removed from the cache, leaving it empty.
- * Triggered after a `'delete'` or `'expire'` eviction.
- *
- * @example
- * ```ts
- * cache.on('empty', () => {
- *   console.log('cache is now empty');
- * });
- * ```
- */
-export interface MemorizeEmptyEvent {
-  type: 'empty';
-}
-
-/** Union of all possible cache events. */
-export type MemorizeEvent = MemorizeSetEvent | MemorizeDeleteEvent | MemorizeExpireEvent | MemorizeEmptyEvent;
-
-/** The string literal union of supported event names. */
-export type MemorizeEventType = MemorizeEvent['type'];
+export type {
+  CacheEntry,
+  CacheInfo,
+  MemorizeEvent,
+  MemorizeSetEvent,
+  MemorizeDeleteEvent,
+  MemorizeExpireEvent,
+  MemorizeEmptyEvent,
+};
+export { MemorizeEventType };
 
 type ListenerMap = {
-  set: Array<(e: MemorizeSetEvent) => void>;
-  delete: Array<(e: MemorizeDeleteEvent) => void>;
-  expire: Array<(e: MemorizeExpireEvent) => void>;
-  empty: Array<(e: MemorizeEmptyEvent) => void>;
+  [MemorizeEventType.Set]:    Array<(e: MemorizeSetEvent) => void>;
+  [MemorizeEventType.Delete]: Array<(e: MemorizeDeleteEvent) => void>;
+  [MemorizeEventType.Expire]: Array<(e: MemorizeExpireEvent) => void>;
+  [MemorizeEventType.Empty]:  Array<(e: MemorizeEmptyEvent) => void>;
 };
-
-// ---------------------------------------------------------------------------
-// Store
-// ---------------------------------------------------------------------------
 
 /**
  * Low-level in-memory key-value store with optional TTL and event emission.
@@ -125,24 +34,29 @@ type ListenerMap = {
 export class MemorizeStore {
   private _store = new Map<string, CacheEntry>();
   private _timers = new Map<string, ReturnType<typeof setTimeout>>();
-  private _listeners: ListenerMap = { set: [], delete: [], expire: [], empty: [] };
+  private _listeners: ListenerMap = {
+    [MemorizeEventType.Set]:    [],
+    [MemorizeEventType.Delete]: [],
+    [MemorizeEventType.Expire]: [],
+    [MemorizeEventType.Empty]:  [],
+  };
 
   /**
    * Registers an event listener.
    *
-   * @param event - The event to listen for: `'set'`, `'delete'`, or `'expire'`.
+   * @param event - The event to listen for.
    * @param handler - Callback invoked with the event payload.
    *
    * @example
    * ```ts
-   * store.on('set', (e) => console.log('cached', e.key));
-   * store.on('expire', (e) => console.log('expired', e.key));
+   * store.on(MemorizeEventType.Set,    (e) => console.log('cached',  e.key));
+   * store.on(MemorizeEventType.Expire, (e) => console.log('expired', e.key));
    * ```
    */
-  on(event: 'set', handler: (e: MemorizeSetEvent) => void): void;
-  on(event: 'delete', handler: (e: MemorizeDeleteEvent) => void): void;
-  on(event: 'expire', handler: (e: MemorizeExpireEvent) => void): void;
-  on(event: 'empty', handler: (e: MemorizeEmptyEvent) => void): void;
+  on(event: MemorizeEventType.Set,    handler: (e: MemorizeSetEvent) => void): void;
+  on(event: MemorizeEventType.Delete, handler: (e: MemorizeDeleteEvent) => void): void;
+  on(event: MemorizeEventType.Expire, handler: (e: MemorizeExpireEvent) => void): void;
+  on(event: MemorizeEventType.Empty,  handler: (e: MemorizeEmptyEvent) => void): void;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   on(event: MemorizeEventType, handler: (e: any) => void): void {
     this._listeners[event].push(handler);
@@ -152,7 +66,7 @@ export class MemorizeStore {
    * Stores an entry in the cache.
    *
    * If an entry already exists for the given key its TTL timer is reset and the
-   * value is overwritten. Emits a `'set'` event.
+   * value is overwritten. Emits a {@link MemorizeEventType.Set} event.
    *
    * @param key - The cache key (typically `req.originalUrl`).
    * @param entry - The response data to store.
@@ -168,11 +82,11 @@ export class MemorizeStore {
     const stored: CacheEntry = { ...entry, expiresAt };
     this._store.set(key, stored);
 
-    this._emit('set', { type: 'set', key, ...entry, expiresAt });
+    this._emit(MemorizeEventType.Set, { type: MemorizeEventType.Set, key, ...entry, expiresAt });
 
     if (ttl) {
       const timer = setTimeout(() => {
-        this._evict(key, 'expire');
+        this._evict(key, MemorizeEventType.Expire);
       }, ttl);
 
       if (typeof timer === 'object' && 'unref' in timer) timer.unref();
@@ -191,7 +105,7 @@ export class MemorizeStore {
     if (!entry) return null;
 
     if (entry.expiresAt && Date.now() > entry.expiresAt) {
-      this._evict(key, 'expire');
+      this._evict(key, MemorizeEventType.Expire);
       return null;
     }
 
@@ -207,7 +121,7 @@ export class MemorizeStore {
 
     for (const [key, entry] of this._store) {
       if (entry.expiresAt && Date.now() > entry.expiresAt) {
-        this._evict(key, 'expire');
+        this._evict(key, MemorizeEventType.Expire);
         continue;
       }
       result[key] = this._format(key, entry);
@@ -217,23 +131,24 @@ export class MemorizeStore {
   }
 
   /**
-   * Removes a single entry from the cache. Emits a `'delete'` event.
+   * Removes a single entry from the cache. Emits a {@link MemorizeEventType.Delete} event.
    *
    * @param key - The cache key to remove.
    * @returns `true` if the entry existed and was removed, `false` otherwise.
    */
   delete(key: string): boolean {
     if (!this._store.has(key)) return false;
-    this._evict(key, 'delete');
+    this._evict(key, MemorizeEventType.Delete);
     return true;
   }
 
   /**
-   * Removes all entries from the cache. Emits a `'delete'` event for each entry.
+   * Removes all entries from the cache. Emits a {@link MemorizeEventType.Delete} event
+   * for each entry.
    */
   clear(): void {
     for (const key of this._store.keys()) {
-      this._evict(key, 'delete');
+      this._evict(key, MemorizeEventType.Delete);
     }
   }
 
@@ -250,14 +165,14 @@ export class MemorizeStore {
     if (!entry) return null;
 
     if (entry.expiresAt && Date.now() > entry.expiresAt) {
-      this._evict(key, 'expire');
+      this._evict(key, MemorizeEventType.Expire);
       return null;
     }
 
     return entry;
   }
 
-  private _evict(key: string, reason: 'delete' | 'expire'): void {
+  private _evict(key: string, reason: MemorizeEventType.Delete | MemorizeEventType.Expire): void {
     if (this._timers.has(key)) {
       clearTimeout(this._timers.get(key)!);
       this._timers.delete(key);
@@ -265,7 +180,7 @@ export class MemorizeStore {
     this._store.delete(key);
     this._emit(reason, { type: reason, key });
     if (this._store.size === 0) {
-      this._emit('empty', { type: 'empty' });
+      this._emit(MemorizeEventType.Empty, { type: MemorizeEventType.Empty });
     }
   }
 

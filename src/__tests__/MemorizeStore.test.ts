@@ -1,4 +1,5 @@
 import { MemorizeStore } from '../MemorizeStore';
+import { MemorizeEventType } from '../domain/MemorizeEventType';
 
 const entry = (body: unknown = 'value') => ({
   body,
@@ -61,7 +62,7 @@ describe('MemorizeStore', () => {
   describe('empty event', () => {
     it('fires when the last entry is deleted', () => {
       const handler = jest.fn();
-      store.on('empty', handler);
+      store.on(MemorizeEventType.Empty, handler);
       store.set('/a', entry());
       store.set('/b', entry());
 
@@ -70,12 +71,12 @@ describe('MemorizeStore', () => {
 
       store.delete('/b');
       expect(handler).toHaveBeenCalledTimes(1);
-      expect(handler).toHaveBeenCalledWith({ type: 'empty' });
+      expect(handler).toHaveBeenCalledWith({ type: MemorizeEventType.Empty });
     });
 
     it('fires when clear() empties the store', () => {
       const handler = jest.fn();
-      store.on('empty', handler);
+      store.on(MemorizeEventType.Empty, handler);
       store.set('/a', entry());
       store.set('/b', entry());
       store.clear();
@@ -86,7 +87,7 @@ describe('MemorizeStore', () => {
     it('fires when the last entry expires', () => {
       jest.useFakeTimers();
       const handler = jest.fn();
-      store.on('empty', handler);
+      store.on(MemorizeEventType.Empty, handler);
       store.set('/a', entry(), 500);
       jest.advanceTimersByTime(600);
 
@@ -96,7 +97,7 @@ describe('MemorizeStore', () => {
 
     it('does not fire when the store still has entries', () => {
       const handler = jest.fn();
-      store.on('empty', handler);
+      store.on(MemorizeEventType.Empty, handler);
       store.set('/a', entry());
       store.set('/b', entry());
       store.delete('/a');
