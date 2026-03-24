@@ -1,9 +1,17 @@
 {
   "name": "express-memorize",
   "version": "1.0.0",
-  "description": "Express.js in-memory cache middleware with TTL support",
+  "description": "In-memory cache middleware for Express.js. Caches GET responses with optional TTL — zero dependencies, fully typed.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "homepage": "https://github.com/ElJijuna/express-memorize#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ElJijuna/express-memorize.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ElJijuna/express-memorize/issues"
+  },
   "files": [
     "dist"
   ],
@@ -22,7 +30,7 @@
       "enableGlobally": false
     }
   },
-  "keywords": ["express", "middleware", "cache", "memory", "ttl"],
+  "keywords": ["express", "middleware", "cache", "memory", "ttl", "in-memory", "http-cache", "expressjs"],
   "license": "MIT",
   "peerDependencies": {
     "express": ">=4.0.0"

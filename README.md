@@ -52,10 +52,24 @@ The first request computes the response normally. Every subsequent `GET /users` 
 
 ## Usage
 
-### Basic cache
+### Global middleware
+
+Apply the cache to the entire application with `app.use()`. Every `GET` route is cached automatically — non-`GET` requests are bypassed without any extra configuration.
 
 ```typescript
-const cache = memorize({ ttl: 60_000 }); // cache for 60 seconds
+const cache = memorize({ ttl: 60_000 });
+
+app.use(cache()); // applies to all GET routes
+
+app.get('/users',   (req, res) => { res.json({ data: users }) });
+app.get('/products', (req, res) => { res.json({ data: products }) });
+// POST, PUT, PATCH, DELETE routes are unaffected
+```
+
+### Per-route cache
+
+```typescript
+const cache = memorize({ ttl: 60_000 });
 
 app.get('/products', cache(), (req, res) => {
   res.json({ data: products });
