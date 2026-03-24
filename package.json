@@ -13,24 +13,38 @@
     "url": "https://github.com/ElJijuna/express-memorize/issues"
   },
   "files": [
-    "dist"
+    "dist",
+    "CHANGELOG.md"
   ],
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
     "test": "jest",
     "test:watch": "jest --watch",
-    "prepublishOnly": "npm test && npm run build"
+    "prepublishOnly": "npm test && npm run build",
+    "docs": "typedoc",
+    "docs:watch": "typedoc --watch"
   },
   "jest": {
     "preset": "ts-jest",
     "testEnvironment": "node",
-    "testMatch": ["**/__tests__/**/*.test.ts"],
+    "testMatch": [
+      "**/__tests__/**/*.test.ts"
+    ],
     "fakeTimers": {
       "enableGlobally": false
     }
   },
-  "keywords": ["express", "middleware", "cache", "memory", "ttl", "in-memory", "http-cache", "expressjs"],
+  "keywords": [
+    "express",
+    "middleware",
+    "cache",
+    "memory",
+    "ttl",
+    "in-memory",
+    "http-cache",
+    "expressjs"
+  ],
   "license": "MIT",
   "peerDependencies": {
     "express": ">=4.0.0"
@@ -41,6 +55,8 @@
     "@types/node": "^20.0.0",
     "jest": "^29.0.0",
     "ts-jest": "^29.0.0",
+    "typedoc": "^0.28.18",
+    "typedoc-material-theme": "^1.4.1",
     "typescript": "^5.0.0"
   }
 }

@@ -1,0 +1,18 @@
+{
+  "entryPoints": ["src/index.ts"],
+  "out": "docs-site",
+  "name": "express-memorize",
+  "includeVersion": true,
+  "readme": "README.md",
+  "plugin": ["typedoc-material-theme"],
+  "themeColor": "#1976d2",
+  "navigationLinks": {
+    "GitHub": "https://github.com/ElJijuna/express-memorize",
+    "NPM": "https://www.npmjs.com/package/express-memorize"
+  },
+  "categoryOrder": ["*", "Other"],
+  "groupOrder": ["Functions", "Interfaces", "Type Aliases", "Classes", "*"],
+  "excludePrivate": true,
+  "excludeInternal": true,
+  "hideGenerator": true
+}
