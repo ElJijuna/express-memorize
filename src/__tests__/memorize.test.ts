@@ -1,7 +1,7 @@
 import { Request, NextFunction } from 'express';
 import { memorize } from '../memorize';
 
-function createMockReqRes(url = '/test') {
+function createMockReqRes(url = '/test', method = 'GET') {
   const responseHeaders: Record<string, string> = {};
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -27,7 +27,7 @@ function createMockReqRes(url = '/test') {
     return (res as any).send(JSON.stringify(body));
   };
 
-  const req = { originalUrl: url } as Request;
+  const req = { originalUrl: url, method } as unknown as Request;
   const next = jest.fn() as unknown as NextFunction;
 
   return { req, res, next, responseHeaders };
@@ -48,6 +48,25 @@ describe('memorize middleware', () => {
 
       expect(responseHeaders['X-Cache']).toBe('MISS');
     });
+
+    it.each(['POST', 'PUT', 'PATCH', 'DELETE'])(
+      'bypasses cache for %s requests',
+      (method) => {
+        const cache = memorize();
+        const middleware = cache();
+
+        // Prime the cache with a GET
+        const { req: getReq, res: getRes, next: getNext } = createMockReqRes('/users', 'GET');
+        middleware(getReq, getRes, getNext);
+        (getRes as any).json({ data: [] });
+
+        // Non-GET to same URL: must call next and not return cached response
+        const { req, res, next } = createMockReqRes('/users', method);
+        middleware(req, res, next);
+        expect(next).toHaveBeenCalledTimes(1);
+        expect(res.send).not.toHaveBeenCalled();
+      }
+    );
 
     it('does not cache non-2xx responses', () => {
       const cache = memorize();

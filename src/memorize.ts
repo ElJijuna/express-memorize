@@ -34,6 +34,11 @@ export function memorize(options: MemorizeOptions = {}): Memorize {
     const effectiveTtl = callOptions?.ttl ?? ttl;
 
     return function (req: Request, res: Response, next: NextFunction): void {
+      if (req.method !== 'GET') {
+        next();
+        return;
+      }
+
       const key = req.originalUrl;
       const cached = store.getRaw(key);
 
