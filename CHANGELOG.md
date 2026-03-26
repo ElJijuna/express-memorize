@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 This file is automatically updated by [release-please](https://github.com/googleapis/release-please) based on [Conventional Commits](https://www.conventionalcommits.org/).
 
+## [1.3.1](https://github.com/ElJijuna/express-memorize/compare/v1.3.0...v1.3.1) (2026-03-26)
+
+
+### Bug Fixes
+
+* add header X-Cache: BYPASS value when set noCache: true in middleware config to override. ([cab3c85](https://github.com/ElJijuna/express-memorize/commit/cab3c85f53885ff287e569248a402632363f31fd))
+
 ## [1.3.0](https://github.com/ElJijuna/express-memorize/compare/v1.2.0...v1.3.0) (2026-03-26)
 
 
