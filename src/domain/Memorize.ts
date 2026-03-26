@@ -93,6 +93,32 @@ export interface Memorize {
   delete(key: string): boolean;
 
   /**
+   * Removes all cache entries whose keys match the given glob pattern.
+   * Emits a {@link MemorizeEventType.Delete} event for each removed entry.
+   *
+   * Glob rules:
+   * - `**` — matches any character sequence **across** path segments (crosses `/`).
+   * - `*`  — matches any character sequence **within** a single path segment (does not cross `/`).
+   * - `?`  — matches any single character except `/`.
+   *
+   * @param pattern - Glob pattern to match against cache keys.
+   * @returns The number of entries removed.
+   *
+   * @example
+   * ```ts
+   * // Invalidate all cached variants of a user regardless of query params.
+   * // Build the pattern with join to avoid the closing-comment sequence in source.
+   * app.put('/users/:id', (req, res) => {
+   *   users.update(req.params.id, req.body);
+   *   const pattern = ['**', 'users', req.params.id + '*'].join('/');
+   *   cache.deleteMatching(pattern); // e.g. ** /users/abc123*  (no space)
+   *   res.json({ ok: true });
+   * });
+   * ```
+   */
+  deleteMatching(pattern: string): number;
+
+  /**
    * Removes **all** entries from the cache and emits a {@link MemorizeEventType.Delete}
    * event for each.
    *

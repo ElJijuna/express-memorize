@@ -1,3 +1,4 @@
+import { globToRegex } from './utils/globToRegex';
 import { CacheEntry } from './domain/CacheEntry';
 import { CacheInfo } from './domain/CacheInfo';
 import { MemorizeEventType } from './domain/MemorizeEventType';
@@ -140,6 +141,30 @@ export class MemorizeStore {
     if (!this._store.has(key)) return false;
     this._evict(key, MemorizeEventType.Delete);
     return true;
+  }
+
+  /**
+   * Removes all cache entries whose keys match the given glob pattern.
+   * Emits a {@link MemorizeEventType.Delete} event for each removed entry.
+   *
+   * Glob rules:
+   * - `*`  — matches any character sequence **within** a single path segment (does not cross `/`).
+   * - `**` — matches any character sequence **across** path segments (crosses `/`).
+   * - `?`  — matches any single character except `/`.
+   *
+   * @param pattern - Glob pattern to match against cache keys.
+   * @returns The number of entries removed.
+   */
+  deleteMatching(pattern: string): number {
+    const regex = globToRegex(pattern);
+    let count = 0;
+    for (const key of [...this._store.keys()]) {
+      if (regex.test(key)) {
+        this._evict(key, MemorizeEventType.Delete);
+        count++;
+      }
+    }
+    return count;
   }
 
   /**
