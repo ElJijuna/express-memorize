@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 This file is automatically updated by [release-please](https://github.com/googleapis/release-please) based on [Conventional Commits](https://www.conventionalcommits.org/).
 
+## [1.3.0](https://github.com/ElJijuna/express-memorize/compare/v1.2.0...v1.3.0) (2026-03-26)
+
+
+### Features
+
+* add 'deleteMatching' to delete with pattern from cache. ([3564f0a](https://github.com/ElJijuna/express-memorize/commit/3564f0a316c54031216fce8df042b78c81d27fe3))
+* add config in middleware to disable cache to specific paths. ([cf89777](https://github.com/ElJijuna/express-memorize/commit/cf897777a2c5c984466ec6061a1befbddf73f502))
+
 ## [1.2.0](https://github.com/ElJijuna/express-memorize/compare/v1.1.0...v1.2.0) (2026-03-24)
 
 
