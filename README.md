@@ -102,6 +102,33 @@ app.post('/users', (req, res) => {
 });
 ```
 
+### Pattern-based invalidation
+
+Use `cache.deleteMatching(pattern)` to remove all cache entries whose keys match a glob pattern. This is useful when you don't know the exact key — for example, when a URL may have different query strings.
+
+```typescript
+// Cached keys: /api/users/abc123, /api/users/abc123?lang=es, /api/users/abc123?page=1
+app.put('/users/:id', (req, res) => {
+  users.update(req.params.id, req.body);
+
+  // Remove all cached variants of this user, regardless of query params
+  const deleted = cache.deleteMatching(`**/users/${req.params.id}*`);
+  console.log(`${deleted} cache entries removed`);
+
+  res.json({ ok: true });
+});
+```
+
+**Glob rules:**
+
+| Pattern | Behaviour |
+|---------|-----------|
+| `*` | Matches any sequence of characters **within** a single path segment (does not cross `/`) |
+| `**` | Matches any sequence of characters **across** path segments (crosses `/`) |
+| `?` | Matches any single character except `/` |
+
+`deleteMatching` returns the number of entries removed and emits a `delete` event for each one.
+
 ### Event hooks
 
 ```typescript
@@ -143,8 +170,9 @@ cache.getAll();        // Record<string, CacheInfo> — all active entries
 ### Clear the cache
 
 ```typescript
-cache.delete('/users');  // remove one entry
-cache.clear();           // remove all entries
+cache.delete('/users');                  // remove one entry
+cache.deleteMatching('**/users/*');      // remove all /users/* entries
+cache.clear();                           // remove all entries
 ```
 
 ## API Reference
@@ -172,6 +200,7 @@ Returns an Express `RequestHandler` middleware. Can override the global TTL.
 | `get` | `(key: string) => CacheInfo \| null` | Returns info for a cached key. |
 | `getAll` | `() => Record<string, CacheInfo>` | Returns all active cache entries. |
 | `delete` | `(key: string) => boolean` | Removes a single entry. Returns `false` if not found. |
+| `deleteMatching` | `(pattern: string) => number` | Removes all entries matching a glob pattern. Returns the count removed. |
 | `clear` | `() => void` | Removes all entries. |
 
 ### Events
@@ -179,7 +208,7 @@ Returns an Express `RequestHandler` middleware. Can override the global TTL.
 | Event | Payload | When |
 |-------|---------|------|
 | `set` | `{ type, key, body, statusCode, contentType, expiresAt }` | A response is stored |
-| `delete` | `{ type, key }` | `cache.delete()` or `cache.clear()` is called |
+| `delete` | `{ type, key }` | `cache.delete()`, `cache.deleteMatching()`, or `cache.clear()` is called |
 | `expire` | `{ type, key }` | TTL timer fires or lazy expiry is detected |
 
 ## Response Headers

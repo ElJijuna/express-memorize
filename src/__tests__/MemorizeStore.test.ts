@@ -128,6 +128,74 @@ describe('MemorizeStore', () => {
     });
   });
 
+  describe('deleteMatching', () => {
+    it('removes all keys matching a simple wildcard', () => {
+      store.set('/api/users/abc', entry());
+      store.set('/api/users/abc?lang=es', entry());
+      store.set('/api/products/1', entry());
+
+      const count = store.deleteMatching('/api/users/*');
+
+      expect(count).toBe(2);
+      expect(store.get('/api/users/abc')).toBeNull();
+      expect(store.get('/api/users/abc?lang=es')).toBeNull();
+      expect(store.get('/api/products/1')).not.toBeNull();
+    });
+
+    it('removes keys matching a cross-segment wildcard (**)', () => {
+      store.set('/api/users/abc', entry());
+      store.set('/v2/users/abc', entry());
+      store.set('/api/products/1', entry());
+
+      const count = store.deleteMatching(['**', 'users', 'abc'].join('/'));
+
+      expect(count).toBe(2);
+      expect(store.get('/api/users/abc')).toBeNull();
+      expect(store.get('/v2/users/abc')).toBeNull();
+      expect(store.get('/api/products/1')).not.toBeNull();
+    });
+
+    it('returns 0 when no keys match', () => {
+      store.set('/api/users/abc', entry());
+
+      expect(store.deleteMatching('/api/orders/*')).toBe(0);
+      expect(store.get('/api/users/abc')).not.toBeNull();
+    });
+
+    it('emits a delete event for each removed entry', () => {
+      const handler = jest.fn();
+      store.on(MemorizeEventType.Delete, handler);
+      store.set('/api/users/1', entry());
+      store.set('/api/users/2', entry());
+
+      store.deleteMatching('/api/users/*');
+
+      expect(handler).toHaveBeenCalledTimes(2);
+    });
+
+    it('emits empty event when last entries are removed', () => {
+      const handler = jest.fn();
+      store.on(MemorizeEventType.Empty, handler);
+      store.set('/api/users/1', entry());
+      store.set('/api/users/2', entry());
+
+      store.deleteMatching('/api/users/*');
+
+      expect(handler).toHaveBeenCalledTimes(1);
+    });
+
+    it('matches trailing query string with *', () => {
+      store.set('/api/users/abc?page=1', entry());
+      store.set('/api/users/abc?page=2', entry());
+      store.set('/api/users/xyz', entry());
+
+      const count = store.deleteMatching('/api/users/abc*');
+
+      expect(count).toBe(2);
+      expect(store.get('/api/users/xyz')).not.toBeNull();
+    });
+  });
+
   describe('TTL', () => {
     beforeEach(() => jest.useFakeTimers());
     afterEach(() => jest.useRealTimers());
