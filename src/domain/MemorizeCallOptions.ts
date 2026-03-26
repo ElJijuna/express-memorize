@@ -14,4 +14,10 @@ export interface MemorizeCallOptions {
    * Pass `0` or omit to fall back to the global TTL.
    */
   ttl?: number;
+  /**
+   * When `true`, the middleware skips both reading from and writing to the cache
+   * for this route. Useful when a global `app.use(cache())` is in place but a
+   * specific route should never be cached.
+   */
+  noCache?: boolean;
 }

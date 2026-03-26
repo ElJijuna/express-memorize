@@ -61,7 +61,7 @@ export function memorize(options: MemorizeOptions = {}): Memorize {
     const effectiveTtl = callOptions?.ttl ?? ttl;
 
     return function (req: Request, res: Response, next: NextFunction): void {
-      if (req.method !== 'GET') {
+      if (req.method !== 'GET' || callOptions?.noCache) {
         next();
         return;
       }
