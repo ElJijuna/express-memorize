@@ -218,6 +218,46 @@ describe('memorize middleware', () => {
     });
   });
 
+  describe('noCache', () => {
+    it('sets X-Cache: BYPASS and calls next', () => {
+      const cache = memorize();
+      const middleware = cache({ noCache: true });
+
+      const { req, res, next, responseHeaders } = createMockReqRes();
+      middleware(req, res, next);
+
+      expect(next).toHaveBeenCalledTimes(1);
+      expect(responseHeaders['X-Cache']).toBe('BYPASS');
+    });
+
+    it('does not store the response when noCache is true', () => {
+      const cache = memorize();
+      const middleware = cache({ noCache: true });
+
+      const { req, res, next } = createMockReqRes('/users');
+      middleware(req, res, next);
+      (res as any).json({ data: [] });
+
+      expect(cache.get('/users')).toBeNull();
+    });
+
+    it('does not serve a cached entry when noCache is true', () => {
+      const cache = memorize();
+
+      // Prime the cache with a normal request
+      const { req, res, next } = createMockReqRes('/users');
+      cache()(req, res, next);
+      (res as any).json({ data: [] });
+
+      // noCache request: must call next and set BYPASS, not serve the cached HIT
+      const { req: req2, res: res2, next: next2, responseHeaders: h2 } = createMockReqRes('/users');
+      cache({ noCache: true })(req2, res2, next2);
+
+      expect(next2).toHaveBeenCalledTimes(1);
+      expect(h2['X-Cache']).toBe('BYPASS');
+    });
+  });
+
   describe('TTL', () => {
     beforeEach(() => jest.useFakeTimers());
     afterEach(() => jest.useRealTimers());

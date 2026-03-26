@@ -16,8 +16,8 @@ export interface MemorizeCallOptions {
   ttl?: number;
   /**
    * When `true`, the middleware skips both reading from and writing to the cache
-   * for this route. Useful when a global `app.use(cache())` is in place but a
-   * specific route should never be cached.
+   * for this route and sets `X-Cache: BYPASS` on the response. Useful when a
+   * global `app.use(cache())` is in place but a specific route should never be cached.
    */
   noCache?: boolean;
 }
