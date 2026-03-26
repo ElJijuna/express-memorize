@@ -91,11 +91,12 @@ export function memorize(options: MemorizeOptions = {}): Memorize {
     };
   } as Memorize;
 
-  cache.get    = (key: string) => store.get(key);
-  cache.getAll = () => store.getAll();
-  cache.delete = (key: string) => store.delete(key);
-  cache.clear  = () => store.clear();
-  cache.on     = store.on.bind(store) as Memorize['on'];
+  cache.get            = (key: string) => store.get(key);
+  cache.getAll         = () => store.getAll();
+  cache.delete         = (key: string) => store.delete(key);
+  cache.deleteMatching = (pattern: string) => store.deleteMatching(pattern);
+  cache.clear          = () => store.clear();
+  cache.on             = store.on.bind(store) as Memorize['on'];
 
   return cache;
 }
