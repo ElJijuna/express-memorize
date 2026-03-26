@@ -21,7 +21,7 @@
 - Per-route TTL override
 - Event hooks: `set`, `delete`, `expire`
 - Cache inspection and invalidation API
-- `X-Cache: HIT | MISS` response header
+- `X-Cache: HIT | MISS | BYPASS` response header
 - Zero runtime dependencies
 - Full TypeScript support
 
@@ -217,6 +217,7 @@ Returns an Express `RequestHandler` middleware. Can override the global TTL.
 |--------|-------|-------------|
 | `X-Cache` | `HIT` | Response served from cache |
 | `X-Cache` | `MISS` | Response computed and stored |
+| `X-Cache` | `BYPASS` | Cache skipped — `noCache: true` was set for this route |
 
 ## Behavior
 
