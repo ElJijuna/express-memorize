@@ -73,14 +73,14 @@ export class MemorizeStore {
    * @param entry - The response data to store.
    * @param ttl - Time-to-live in milliseconds. Omit or pass `null` for no expiry.
    */
-  set(key: string, entry: Omit<CacheEntry, 'expiresAt'>, ttl?: number | null): void {
+  set(key: string, entry: Omit<CacheEntry, 'expiresAt' | 'hits'>, ttl?: number | null): void {
     if (this._timers.has(key)) {
       clearTimeout(this._timers.get(key)!);
       this._timers.delete(key);
     }
 
     const expiresAt = ttl ? Date.now() + ttl : null;
-    const stored: CacheEntry = { ...entry, expiresAt };
+    const stored: CacheEntry = { ...entry, expiresAt, hits: 1 };
     this._store.set(key, stored);
 
     this._emit(MemorizeEventType.Set, { type: MemorizeEventType.Set, key, ...entry, expiresAt });
@@ -194,6 +194,7 @@ export class MemorizeStore {
       return null;
     }
 
+    entry.hits++;
     return entry;
   }
 
@@ -222,6 +223,7 @@ export class MemorizeStore {
       statusCode: entry.statusCode,
       contentType: entry.contentType,
       expiresAt: entry.expiresAt,
+      hits: entry.hits,
       remainingTtl: entry.expiresAt ? Math.max(0, entry.expiresAt - Date.now()) : null,
     };
   }

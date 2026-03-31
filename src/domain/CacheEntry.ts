@@ -10,4 +10,6 @@ export interface CacheEntry {
   contentType: string;
   /** Unix timestamp (ms) at which the entry expires, or `null` if it never expires. */
   expiresAt: number | null;
+  /** Number of times this entry has been requested (including the initial cache miss). */
+  hits: number;
 }

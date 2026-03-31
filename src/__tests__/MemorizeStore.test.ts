@@ -43,6 +43,35 @@ describe('MemorizeStore', () => {
     });
   });
 
+  describe('hits counter', () => {
+    it('starts at 1 after set', () => {
+      store.set('/users', entry());
+      expect(store.get('/users')!.hits).toBe(1);
+    });
+
+    it('increments on each getRaw call', () => {
+      store.set('/users', entry());
+      store.getRaw('/users');
+      store.getRaw('/users');
+      expect(store.get('/users')!.hits).toBe(3);
+    });
+
+    it('resets to 1 when key is re-set', () => {
+      store.set('/users', entry());
+      store.getRaw('/users');
+      store.getRaw('/users');
+      store.set('/users', entry('new'));
+      expect(store.get('/users')!.hits).toBe(1);
+    });
+
+    it('getAll includes hits', () => {
+      store.set('/a', entry());
+      store.getRaw('/a');
+      const all = store.getAll();
+      expect(all['/a'].hits).toBe(2);
+    });
+  });
+
   describe('getAll', () => {
     it('returns all stored entries', () => {
       store.set('/a', entry(1));
