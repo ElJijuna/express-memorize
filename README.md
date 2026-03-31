@@ -21,6 +21,7 @@
 - Per-route TTL override
 - Event hooks: `set`, `delete`, `expire`
 - Cache inspection and invalidation API
+- Hit counter per cache entry
 - `X-Cache: HIT | MISS | BYPASS` response header
 - Zero runtime dependencies
 - Full TypeScript support
@@ -164,7 +165,20 @@ cache.getAll();        // Record<string, CacheInfo> — all active entries
   contentType: string;
   expiresAt: number | null;
   remainingTtl: number | null; // ms until expiry, null if no TTL
+  hits: number;                // total times this key was requested
 }
+```
+
+`hits` starts at `1` on the initial cache miss (when the entry is stored) and increments by `1` on every subsequent cache hit. It resets to `1` if the entry is evicted and re-cached.
+
+```typescript
+// Example: monitoring hot keys
+const entries = cache.getAll();
+for (const [key, info] of Object.entries(entries)) {
+  console.log(`${key} → ${info.hits} hits`);
+}
+// /users        → 42 hits
+// /products     → 7 hits
 ```
 
 ### Clear the cache
