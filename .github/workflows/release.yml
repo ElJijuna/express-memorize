@@ -1,0 +1,86 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  release:
+    name: Release & Publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+      id-token: write
+
+    outputs:
+      new_release_published: ${{ steps.release.outputs.new_release_published }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          registry-url: https://registry.npmjs.org
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Semantic Release
+        id: release
+        uses: cycjimmy/semantic-release-action@v4
+        with:
+          semantic_version: 24
+          extra_plugins: |
+            @semantic-release/changelog@6
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Create changelog PR
+        if: steps.release.outputs.new_release_published == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NEW_VERSION: ${{ steps.release.outputs.new_release_version }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          BRANCH="chore/release-v${NEW_VERSION}"
+          git checkout -b "$BRANCH"
+          git add CHANGELOG.md package.json package-lock.json
+          git commit -m "chore(release): ${NEW_VERSION}"
+          git push origin "$BRANCH"
+          cat > /tmp/pr_body.md << EOF
+          ## What does this PR do?
+
+          Automated changelog and version bump for release v${NEW_VERSION}.
+
+          ## Checklist
+
+          - [x] \`npm test\` passes
+          - [ ] New code has tests
+          - [ ] JSDoc updated if public API changed
+          - [ ] README updated if needed
+          - [x] Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/)
+          EOF
+          gh pr create \
+            --title "chore(release): v${NEW_VERSION}" \
+            --body-file /tmp/pr_body.md \
+            --base main \
+            --head "$BRANCH"
