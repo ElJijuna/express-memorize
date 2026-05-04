@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  In-memory cache middleware for <strong>Express.js</strong>.<br/>
+  In-memory HTTP cache for <strong>Express, Hono, Fetch API</strong>, and more.<br/>
   Caches <code>GET</code> responses with optional TTL — zero dependencies, fully typed.
 </p>
 
@@ -18,13 +18,16 @@
 ## Features
 
 - Caches `GET` responses automatically when status code is `2xx`
-- Per-route TTL override
-- Event hooks: `set`, `delete`, `expire`
-- Cache inspection and invalidation API
+- Works with **Express**, **Hono**, **Fetch API / serverless**, and direct service-level usage
+- Per-route TTL override and `noCache` bypass
+- **`maxEntries` cap with LRU eviction** to bound memory usage
+- **Size metrics**: `size()`, `byteSize()`, `getStats()`
+- **Service-level cache**: `remember()`, `set()`, `getValue()`
+- Event hooks: `set`, `delete`, `expire`, `evict`
+- Cache inspection and invalidation API (`get`, `getAll`, `delete`, `deleteMatching`, `clear`)
 - Hit counter per cache entry
 - `X-Cache: HIT | MISS | BYPASS` response header
-- Zero runtime dependencies
-- Full TypeScript support
+- Zero runtime dependencies, fully typed
 
 ## Installation
 
@@ -32,14 +35,22 @@
 npm install express-memorize
 ```
 
+Adapters for non-Express runtimes are optional — install only what you need:
+
+```bash
+npm install hono   # only if using the Hono adapter
+```
+
 ## Quick Start
+
+### Express
 
 ```typescript
 import express from 'express';
 import { memorize } from 'express-memorize';
 
 const app = express();
-const cache = memorize({ ttl: 30_000 }); // 30 seconds global TTL
+const cache = memorize({ ttl: 30_000 });
 
 app.get('/users', cache(), async (req, res) => {
   const users = await db.getUsers();
@@ -49,32 +60,60 @@ app.get('/users', cache(), async (req, res) => {
 app.listen(3000);
 ```
 
-The first request computes the response normally. Every subsequent `GET /users` is served from memory until the TTL expires.
+### Hono
+
+```typescript
+import { Hono } from 'hono';
+import { memorize } from 'express-memorize';
+import { createHonoMiddleware } from 'express-memorize/hono';
+
+const app = new Hono();
+const cache = memorize({ ttl: 30_000 });
+
+app.get('/users', createHonoMiddleware(cache), async (c) => {
+  return c.json(await usersService.findAll());
+});
+```
+
+### Fetch API / Serverless
+
+```typescript
+import { memorize } from 'express-memorize';
+import { cacheFetchHandler } from 'express-memorize/fetch';
+
+const cache = memorize({ ttl: 30_000 });
+
+export default cacheFetchHandler(cache, async (request) => {
+  const users = await usersService.findAll();
+  return Response.json(users);
+});
+```
+
+### Service-level caching
+
+Cache arbitrary values directly — no HTTP layer required.
+
+```typescript
+const cache = memorize({ ttl: 60_000 });
+
+// Compute-and-cache pattern
+const users = await cache.remember('users:list', () => usersService.findAll());
+
+// Explicit set/get
+cache.set('config', appConfig);
+const config = cache.getValue<AppConfig>('config');
+```
+
+---
 
 ## Usage
 
-### Global middleware
-
-Apply the cache to the entire application with `app.use()`. Every `GET` route is cached automatically — non-`GET` requests are bypassed without any extra configuration.
+### Global middleware (Express)
 
 ```typescript
 const cache = memorize({ ttl: 60_000 });
 
 app.use(cache()); // applies to all GET routes
-
-app.get('/users',   (req, res) => { res.json({ data: users }) });
-app.get('/products', (req, res) => { res.json({ data: products }) });
-// POST, PUT, PATCH, DELETE routes are unaffected
-```
-
-### Per-route cache
-
-```typescript
-const cache = memorize({ ttl: 60_000 });
-
-app.get('/products', cache(), (req, res) => {
-  res.json({ data: products });
-});
 ```
 
 ### Per-route TTL override
@@ -83,39 +122,36 @@ app.get('/products', cache(), (req, res) => {
 const cache = memorize({ ttl: 60_000 }); // global: 60s
 
 app.get('/users',    cache(),               handler); // 60s
-app.get('/products', cache({ ttl: 10_000 }), handler); // override: 10s
+app.get('/products', cache({ ttl: 10_000 }), handler); // 10s
 app.get('/config',   cache({ ttl: 0 }),      handler); // no expiry
+```
+
+### noCache bypass
+
+```typescript
+app.get('/live-feed', cache({ noCache: true }), handler);
+// Sets X-Cache: BYPASS, never reads or writes the cache
 ```
 
 ### Cache invalidation
 
 ```typescript
-const cache = memorize({ ttl: 30_000 });
-
-app.get('/users', cache(), (req, res) => {
-  res.json({ data: users });
-});
-
 app.post('/users', (req, res) => {
   users.push(req.body);
-  cache.delete('/users'); // invalidate after mutation
-  res.status(201).json({ data: req.body });
+  cache.delete('/users');
+  res.status(201).json(req.body);
 });
 ```
 
 ### Pattern-based invalidation
 
-Use `cache.deleteMatching(pattern)` to remove all cache entries whose keys match a glob pattern. This is useful when you don't know the exact key — for example, when a URL may have different query strings.
+Use `cache.deleteMatching(pattern)` to remove entries by glob pattern.
 
 ```typescript
-// Cached keys: /api/users/abc123, /api/users/abc123?lang=es, /api/users/abc123?page=1
 app.put('/users/:id', (req, res) => {
   users.update(req.params.id, req.body);
-
-  // Remove all cached variants of this user, regardless of query params
   const deleted = cache.deleteMatching(`**/users/${req.params.id}*`);
-  console.log(`${deleted} cache entries removed`);
-
+  console.log(`${deleted} entries removed`);
   res.json({ ok: true });
 });
 ```
@@ -124,35 +160,33 @@ app.put('/users/:id', (req, res) => {
 
 | Pattern | Behaviour |
 |---------|-----------|
-| `*` | Matches any sequence of characters **within** a single path segment (does not cross `/`) |
-| `**` | Matches any sequence of characters **across** path segments (crosses `/`) |
+| `*` | Matches any sequence within a single path segment (does not cross `/`) |
+| `**` | Matches any sequence across path segments (crosses `/`) |
 | `?` | Matches any single character except `/` |
 
-`deleteMatching` returns the number of entries removed and emits a `delete` event for each one.
+### Bounding memory with `maxEntries`
 
-### Event hooks
+Prevent unbounded growth by setting a maximum number of entries. When the limit is reached, the **least-recently-used (LRU)** entry is evicted before the new one is stored.
 
 ```typescript
-const cache = memorize({ ttl: 30_000 });
-
-cache.on('set', (e) => {
-  console.log(`[cache] stored ${e.key} — expires in ${e.expiresAt ? e.expiresAt - Date.now() : '∞'}ms`);
-});
-
-cache.on('delete', (e) => {
-  console.log(`[cache] deleted ${e.key}`);
-});
-
-cache.on('expire', (e) => {
-  console.log(`[cache] expired ${e.key}`);
-});
+const cache = memorize({ ttl: 30_000, maxEntries: 1_000 });
 ```
+
+### Size metrics
+
+```typescript
+cache.size();      // number of active entries
+cache.byteSize();  // approximate total body size in bytes
+cache.getStats();  // { entries, maxEntries, byteSize }
+```
+
+> `byteSize()` is an estimate based on UTF-8 encoding for strings and `byteLength` for buffers. It may not reflect actual VM memory usage.
 
 ### Inspect the cache
 
 ```typescript
-cache.get('/users');   // CacheInfo | null — single entry
-cache.getAll();        // Record<string, CacheInfo> — all active entries
+cache.get('/users');   // CacheInfo | null
+cache.getAll();        // Record<string, CacheInfo>
 ```
 
 `CacheInfo` shape:
@@ -165,29 +199,26 @@ cache.getAll();        // Record<string, CacheInfo> — all active entries
   contentType: string;
   expiresAt: number | null;
   remainingTtl: number | null; // ms until expiry, null if no TTL
-  hits: number;                // total times this key was requested
+  hits: number;                // times this key was served from cache
+  size: number;                // approximate body size in bytes
 }
 ```
 
-`hits` starts at `1` on the initial cache miss (when the entry is stored) and increments by `1` on every subsequent cache hit. It resets to `1` if the entry is evicted and re-cached.
+`hits` starts at `1` on the initial cache miss and increments on every hit. It resets to `1` if the entry is evicted and re-cached.
+
+### Event hooks
 
 ```typescript
-// Example: monitoring hot keys
-const entries = cache.getAll();
-for (const [key, info] of Object.entries(entries)) {
-  console.log(`${key} → ${info.hits} hits`);
-}
-// /users        → 42 hits
-// /products     → 7 hits
+import { MemorizeEventType } from 'express-memorize';
+
+cache.on(MemorizeEventType.Set,    (e) => console.log('stored',  e.key));
+cache.on(MemorizeEventType.Delete, (e) => console.log('deleted', e.key));
+cache.on(MemorizeEventType.Expire, (e) => console.log('expired', e.key));
+cache.on(MemorizeEventType.Evict,  (e) => console.log('evicted', e.key)); // maxEntries LRU
+cache.on(MemorizeEventType.Empty,  ()  => console.log('cache is empty'));
 ```
 
-### Clear the cache
-
-```typescript
-cache.delete('/users');                  // remove one entry
-cache.deleteMatching('**/users/*');      // remove all /users/* entries
-cache.clear();                           // remove all entries
-```
+---
 
 ## API Reference
 
@@ -198,32 +229,56 @@ Creates a cache instance. Returns a `Memorize` object.
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `ttl` | `number` | `undefined` | Time-to-live in milliseconds. Omit for no expiry. |
+| `maxEntries` | `number` | `undefined` | Maximum number of entries. LRU eviction when reached. |
 
-### `cache(options?)`
+### `cache(options?)` / `cache.express(options?)`
 
-Returns an Express `RequestHandler` middleware. Can override the global TTL.
+Returns an Express `RequestHandler`. `cache()` is a backwards-compatible alias for `cache.express()`.
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `ttl` | `number` | global `ttl` | TTL override for this specific route. |
+| `ttl` | `number` | global `ttl` | TTL override for this route. |
+| `noCache` | `boolean` | `false` | Skip cache entirely. Sets `X-Cache: BYPASS`. |
+
+### Service-level cache methods
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `remember` | `(key, factory, ttl?) => Promise<T>` | Return cached value or call factory and cache the result. |
+| `set` | `(key, value, ttl?) => void` | Store an arbitrary value. |
+| `getValue` | `(key) => T \| undefined` | Retrieve a value stored via `set` or `remember`. |
 
 ### Cache management
 
 | Method | Signature | Description |
 |--------|-----------|-------------|
-| `get` | `(key: string) => CacheInfo \| null` | Returns info for a cached key. |
-| `getAll` | `() => Record<string, CacheInfo>` | Returns all active cache entries. |
-| `delete` | `(key: string) => boolean` | Removes a single entry. Returns `false` if not found. |
-| `deleteMatching` | `(pattern: string) => number` | Removes all entries matching a glob pattern. Returns the count removed. |
+| `get` | `(key) => CacheInfo \| null` | Returns info for a cached key. |
+| `getAll` | `() => Record<string, CacheInfo>` | Returns all active entries. |
+| `delete` | `(key) => boolean` | Removes a single entry. |
+| `deleteMatching` | `(pattern) => number` | Removes entries matching a glob pattern. |
 | `clear` | `() => void` | Removes all entries. |
+| `size` | `() => number` | Number of active entries. |
+| `byteSize` | `() => number` | Approximate total body size in bytes. |
+| `getStats` | `() => MemorizeStats` | Aggregate stats: `{ entries, maxEntries, byteSize }`. |
+
+### Adapters
+
+| Import path | Export | Framework |
+|-------------|--------|-----------|
+| `express-memorize` | `memorize` | Core factory |
+| `express-memorize/express` | `createExpressAdapter(cache, options?)` | Express |
+| `express-memorize/hono` | `createHonoMiddleware(cache, options?)` | Hono |
+| `express-memorize/fetch` | `cacheFetchHandler(cache, handler, options?)` | Fetch API / Serverless |
 
 ### Events
 
 | Event | Payload | When |
 |-------|---------|------|
-| `set` | `{ type, key, body, statusCode, contentType, expiresAt }` | A response is stored |
-| `delete` | `{ type, key }` | `cache.delete()`, `cache.deleteMatching()`, or `cache.clear()` is called |
+| `set` | `{ type, key, body, statusCode, contentType, expiresAt, size }` | A response is stored |
+| `delete` | `{ type, key }` | Manual removal via `delete`, `deleteMatching`, or `clear` |
 | `expire` | `{ type, key }` | TTL timer fires or lazy expiry is detected |
+| `evict` | `{ type, key }` | LRU eviction due to `maxEntries` limit |
+| `empty` | `{ type }` | Last entry removed, cache is now empty |
 
 ## Response Headers
 
@@ -231,14 +286,15 @@ Returns an Express `RequestHandler` middleware. Can override the global TTL.
 |--------|-------|-------------|
 | `X-Cache` | `HIT` | Response served from cache |
 | `X-Cache` | `MISS` | Response computed and stored |
-| `X-Cache` | `BYPASS` | Cache skipped — `noCache: true` was set for this route |
+| `X-Cache` | `BYPASS` | Cache skipped — `noCache: true` |
 
 ## Behavior
 
-- Only `GET` requests are cached. All other methods bypass the middleware entirely.
+- Only `GET` requests are cached. All other methods bypass the cache entirely.
 - Only responses with a `2xx` status code are stored.
-- Each call to `cache()` returns an independent middleware handler, but all handlers created from the same `memorize()` instance **share the same store**.
+- All middleware and adapter instances created from the same `memorize()` call **share the same store**.
 - Two separate `memorize()` calls produce **independent stores**.
+- Byte size is an approximation — strings use UTF-8 encoding, objects use `JSON.stringify` length.
 
 ## License
 
