@@ -57,8 +57,8 @@ export type { Memorize, MemorizeOptions, MemorizeCallOptions };
  * ```
  */
 export function memorize(options: MemorizeOptions = {}): Memorize {
-  const { ttl } = options;
-  const store = new MemorizeStore();
+  const { ttl, maxEntries } = options;
+  const store = new MemorizeStore(maxEntries);
   const expressMiddleware = createExpressMiddleware(store, ttl);
 
   const cache = function (callOptions?: MemorizeCallOptions) {
@@ -95,6 +95,9 @@ export function memorize(options: MemorizeOptions = {}): Memorize {
   cache.deleteMatching = (pattern: string) => store.deleteMatching(pattern);
   cache.clear          = () => store.clear();
   cache.on             = store.on.bind(store) as Memorize['on'];
+  cache.size           = () => store.size();
+  cache.byteSize       = () => store.byteSize();
+  cache.getStats       = () => store.getStats();
   cache._store         = store;
 
   return cache;

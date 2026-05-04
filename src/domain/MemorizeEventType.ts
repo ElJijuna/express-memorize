@@ -18,4 +18,6 @@ export enum MemorizeEventType {
   Expire = 'expire',
   /** Fired when the last entry is removed, leaving the cache empty. */
   Empty = 'empty',
+  /** Fired when an entry is automatically removed because `maxEntries` was reached. */
+  Evict = 'evict',
 }
