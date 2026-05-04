@@ -1,7 +1,33 @@
 import { Request, Response, NextFunction, RequestHandler } from 'express';
+import type { Memorize } from '../domain/Memorize';
 import { MemorizeStore } from '../MemorizeStore';
 import { MemorizeCallOptions } from '../domain/MemorizeCallOptions';
 
+/**
+ * Creates an Express `RequestHandler` that caches `GET` responses using the
+ * provided {@link Memorize} instance.
+ *
+ * Import from `express-memorize/express` when you need the adapter directly,
+ * without going through the `memorize()` factory.
+ *
+ * @example
+ * ```ts
+ * import { memorize } from 'express-memorize';
+ * import { createExpressAdapter } from 'express-memorize/express';
+ *
+ * const cache = memorize({ ttl: 30_000 });
+ * app.get('/users', createExpressAdapter(cache), handler);
+ * app.get('/products', createExpressAdapter(cache, { ttl: 5_000 }), handler);
+ * ```
+ */
+export function createExpressAdapter(
+  cache: Memorize,
+  options?: MemorizeCallOptions,
+): RequestHandler {
+  return cache.express(options);
+}
+
+/** @internal Used by the memorize() factory. */
 export function createExpressMiddleware(
   store: MemorizeStore,
   globalTtl?: number,
