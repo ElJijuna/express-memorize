@@ -6,6 +6,7 @@ import { MemorizeSetEvent } from './MemorizeSetEvent';
 import { MemorizeDeleteEvent } from './MemorizeDeleteEvent';
 import { MemorizeExpireEvent } from './MemorizeExpireEvent';
 import { MemorizeEmptyEvent } from './MemorizeEmptyEvent';
+import { MemorizeStore } from '../MemorizeStore';
 
 /**
  * The cache instance returned by {@link memorize}.
@@ -211,4 +212,10 @@ export interface Memorize {
   on(event: MemorizeEventType.Delete, handler: (e: MemorizeDeleteEvent) => void): void;
   on(event: MemorizeEventType.Expire, handler: (e: MemorizeExpireEvent) => void): void;
   on(event: MemorizeEventType.Empty,  handler: (e: MemorizeEmptyEvent) => void): void;
+
+  /**
+   * The underlying store. Intended for use by framework adapters only.
+   * @internal
+   */
+  _store: MemorizeStore;
 }
