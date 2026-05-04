@@ -9,4 +9,6 @@ export type {
   MemorizeDeleteEvent,
   MemorizeExpireEvent,
   MemorizeEmptyEvent,
+  MemorizeEvictEvent,
+  MemorizeStats,
 } from './domain/index';

@@ -6,6 +6,8 @@ import { MemorizeSetEvent } from './MemorizeSetEvent';
 import { MemorizeDeleteEvent } from './MemorizeDeleteEvent';
 import { MemorizeExpireEvent } from './MemorizeExpireEvent';
 import { MemorizeEmptyEvent } from './MemorizeEmptyEvent';
+import { MemorizeEvictEvent } from './MemorizeEvictEvent';
+import { MemorizeStats } from './MemorizeStats';
 import { MemorizeStore } from '../MemorizeStore';
 
 /**
@@ -212,6 +214,40 @@ export interface Memorize {
   on(event: MemorizeEventType.Delete, handler: (e: MemorizeDeleteEvent) => void): void;
   on(event: MemorizeEventType.Expire, handler: (e: MemorizeExpireEvent) => void): void;
   on(event: MemorizeEventType.Empty,  handler: (e: MemorizeEmptyEvent) => void): void;
+  on(event: MemorizeEventType.Evict,  handler: (e: MemorizeEvictEvent) => void): void;
+
+  /**
+   * Returns the number of active (non-expired) cache entries.
+   *
+   * @example
+   * ```ts
+   * console.log(`${cache.size()} entries in cache`);
+   * ```
+   */
+  size(): number;
+
+  /**
+   * Returns the approximate total byte size of all cached bodies.
+   *
+   * The value is an estimate based on UTF-8 encoding for strings and
+   * `byteLength` for buffers. It may not reflect actual memory usage.
+   *
+   * @example
+   * ```ts
+   * console.log(`~${cache.byteSize()} bytes cached`);
+   * ```
+   */
+  byteSize(): number;
+
+  /**
+   * Returns aggregate cache statistics.
+   *
+   * @example
+   * ```ts
+   * const { entries, maxEntries, byteSize } = cache.getStats();
+   * ```
+   */
+  getStats(): MemorizeStats;
 
   /**
    * The underlying store. Intended for use by framework adapters only.

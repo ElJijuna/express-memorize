@@ -1,5 +1,6 @@
 import { Request, NextFunction } from 'express';
 import { memorize } from '../memorize';
+import { MemorizeEventType } from '../domain/MemorizeEventType';
 
 function createMockReqRes(url = '/test', method = 'GET') {
   const responseHeaders: Record<string, string> = {};
@@ -492,6 +493,67 @@ describe('memorize middleware', () => {
       expect(factory2).toHaveBeenCalledTimes(1);
 
       jest.useRealTimers();
+    });
+  });
+
+  describe('size / byteSize / getStats', () => {
+    it('size() returns 0 for empty cache', () => {
+      expect(memorize().size()).toBe(0);
+    });
+
+    it('size() reflects number of cached entries', () => {
+      const cache = memorize();
+      const middleware = cache();
+      ['/a', '/b'].forEach((url) => {
+        const { req, res, next } = createMockReqRes(url);
+        middleware(req, res, next);
+        (res as any).json({ url });
+      });
+      expect(cache.size()).toBe(2);
+    });
+
+    it('byteSize() returns 0 for empty cache', () => {
+      expect(memorize().byteSize()).toBe(0);
+    });
+
+    it('byteSize() is positive after caching via set()', () => {
+      const cache = memorize();
+      cache.set('key', { data: 'hello' });
+      expect(cache.byteSize()).toBeGreaterThan(0);
+    });
+
+    it('getStats() returns correct shape', () => {
+      const cache = memorize({ maxEntries: 10 });
+      cache.set('key', 'value');
+      const stats = cache.getStats();
+      expect(stats.entries).toBe(1);
+      expect(stats.maxEntries).toBe(10);
+      expect(stats.byteSize).toBeGreaterThan(0);
+    });
+
+    it('getStats() maxEntries is null when not configured', () => {
+      expect(memorize().getStats().maxEntries).toBeNull();
+    });
+  });
+
+  describe('maxEntries', () => {
+    it('evicts LRU entry when limit is reached', () => {
+      const cache = memorize({ maxEntries: 2 });
+      cache.set('/a', 'a');
+      cache.set('/b', 'b');
+      cache.set('/c', 'c'); // evicts /a
+      expect(cache.getValue('/a')).toBeUndefined();
+      expect(cache.getValue('/b')).toBe('b');
+      expect(cache.getValue('/c')).toBe('c');
+    });
+
+    it('emits Evict event', () => {
+      const cache = memorize({ maxEntries: 1 });
+      const evicted: string[] = [];
+      cache.on(MemorizeEventType.Evict, (e) => evicted.push(e.key));
+      cache.set('/a', 'a');
+      cache.set('/b', 'b');
+      expect(evicted).toEqual(['/a']);
     });
   });
 });
