@@ -12,6 +12,10 @@
     "./hono": {
       "types": "./dist/adapters/hono.d.ts",
       "default": "./dist/adapters/hono.js"
+    },
+    "./fetch": {
+      "types": "./dist/adapters/fetch.d.ts",
+      "default": "./dist/adapters/fetch.js"
     }
   },
   "homepage": "https://github.com/ElJijuna/express-memorize#readme",
