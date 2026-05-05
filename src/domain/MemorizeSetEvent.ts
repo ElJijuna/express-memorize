@@ -22,4 +22,6 @@ export interface MemorizeSetEvent {
   contentType: string;
   /** Expiry timestamp in ms, or `null` if no TTL was set. */
   expiresAt: number | null;
+  /** Approximate byte size of the cached body. */
+  size: number;
 }

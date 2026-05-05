@@ -1,5 +1,6 @@
 import { Request, NextFunction } from 'express';
 import { memorize } from '../memorize';
+import { MemorizeEventType } from '../domain/MemorizeEventType';
 
 function createMockReqRes(url = '/test', method = 'GET') {
   const responseHeaders: Record<string, string> = {};
@@ -336,6 +337,223 @@ describe('memorize middleware', () => {
       const { req: req2, res: res2, next: next2 } = createMockReqRes('/users');
       cache2()(req2, res2, next2);
       expect(next2).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('cache.express()', () => {
+    it('behaves identically to cache() on a MISS', () => {
+      const cache = memorize();
+      const { req, res, next, responseHeaders } = createMockReqRes('/users');
+      cache.express()(req, res, next);
+      (res as any).json({ data: [] });
+      expect(next).toHaveBeenCalledTimes(1);
+      expect(responseHeaders['X-Cache']).toBe('MISS');
+    });
+
+    it('behaves identically to cache() on a HIT', () => {
+      const cache = memorize();
+
+      const { req, res, next } = createMockReqRes('/users');
+      cache.express()(req, res, next);
+      (res as any).json({ data: [] });
+
+      const { req: req2, res: res2, next: next2, responseHeaders: h2 } = createMockReqRes('/users');
+      cache.express()(req2, res2, next2);
+      expect(next2).not.toHaveBeenCalled();
+      expect(h2['X-Cache']).toBe('HIT');
+    });
+
+    it('shares the store with cache()', () => {
+      const cache = memorize();
+
+      // Prime via cache()
+      const { req, res, next } = createMockReqRes('/ping');
+      cache()(req, res, next);
+      (res as any).json({ ok: true });
+
+      // Hit via cache.express()
+      const { req: req2, res: res2, next: next2, responseHeaders: h2 } = createMockReqRes('/ping');
+      cache.express()(req2, res2, next2);
+      expect(next2).not.toHaveBeenCalled();
+      expect(h2['X-Cache']).toBe('HIT');
+    });
+  });
+
+  describe('cache.set / cache.getValue', () => {
+    it('stores and retrieves an object', () => {
+      const cache = memorize();
+      cache.set('config', { theme: 'dark', version: 2 });
+      expect(cache.getValue('config')).toEqual({ theme: 'dark', version: 2 });
+    });
+
+    it('stores and retrieves a primitive', () => {
+      const cache = memorize();
+      cache.set('count', 42);
+      expect(cache.getValue<number>('count')).toBe(42);
+    });
+
+    it('stores and retrieves a string', () => {
+      const cache = memorize();
+      cache.set('greeting', 'hello');
+      expect(cache.getValue<string>('greeting')).toBe('hello');
+    });
+
+    it('returns undefined for a missing key', () => {
+      expect(memorize().getValue('nonexistent')).toBeUndefined();
+    });
+
+    it('overwrites an existing value', () => {
+      const cache = memorize();
+      cache.set('key', 'first');
+      cache.set('key', 'second');
+      expect(cache.getValue<string>('key')).toBe('second');
+    });
+
+    it('entry is visible via cache.get after set', () => {
+      const cache = memorize();
+      cache.set('mykey', { data: 1 });
+      const info = cache.get('mykey');
+      expect(info).not.toBeNull();
+      expect(info!.statusCode).toBe(200);
+    });
+
+    it('respects TTL', () => {
+      jest.useFakeTimers();
+      const cache = memorize();
+      cache.set('temp', 'value', 500);
+
+      jest.advanceTimersByTime(499);
+      expect(cache.getValue('temp')).toBe('value');
+
+      jest.advanceTimersByTime(2);
+      expect(cache.getValue('temp')).toBeUndefined();
+
+      jest.useRealTimers();
+    });
+
+    it('uses global TTL when no ttl argument given', () => {
+      jest.useFakeTimers();
+      const cache = memorize({ ttl: 300 });
+      cache.set('x', 1);
+
+      jest.advanceTimersByTime(299);
+      expect(cache.getValue('x')).toBe(1);
+
+      jest.advanceTimersByTime(2);
+      expect(cache.getValue('x')).toBeUndefined();
+
+      jest.useRealTimers();
+    });
+  });
+
+  describe('cache.remember', () => {
+    it('calls factory and returns value on cache miss', async () => {
+      const cache = memorize();
+      const factory = jest.fn().mockResolvedValue({ data: [1, 2, 3] });
+
+      const result = await cache.remember('list', factory);
+      expect(factory).toHaveBeenCalledTimes(1);
+      expect(result).toEqual({ data: [1, 2, 3] });
+    });
+
+    it('does not call factory on cache hit', async () => {
+      const cache = memorize();
+      const factory = jest.fn().mockResolvedValue({ data: [] });
+
+      await cache.remember('list', factory);
+      await cache.remember('list', factory);
+
+      expect(factory).toHaveBeenCalledTimes(1);
+    });
+
+    it('returns the cached value on second call', async () => {
+      const cache = memorize();
+      const factory = jest.fn().mockResolvedValue({ data: 'original' });
+
+      const first = await cache.remember('item', factory);
+      const second = await cache.remember('item', factory);
+
+      expect(first).toEqual(second);
+    });
+
+    it('works with a sync factory', async () => {
+      const cache = memorize();
+      const result = await cache.remember('sync', () => 42);
+      expect(result).toBe(42);
+    });
+
+    it('respects per-call TTL', async () => {
+      jest.useFakeTimers();
+      const cache = memorize();
+      await cache.remember('key', () => 'value', 500);
+
+      jest.advanceTimersByTime(501);
+      const factory2 = jest.fn().mockResolvedValue('new');
+      await cache.remember('key', factory2, 500);
+      expect(factory2).toHaveBeenCalledTimes(1);
+
+      jest.useRealTimers();
+    });
+  });
+
+  describe('size / byteSize / getStats', () => {
+    it('size() returns 0 for empty cache', () => {
+      expect(memorize().size()).toBe(0);
+    });
+
+    it('size() reflects number of cached entries', () => {
+      const cache = memorize();
+      const middleware = cache();
+      ['/a', '/b'].forEach((url) => {
+        const { req, res, next } = createMockReqRes(url);
+        middleware(req, res, next);
+        (res as any).json({ url });
+      });
+      expect(cache.size()).toBe(2);
+    });
+
+    it('byteSize() returns 0 for empty cache', () => {
+      expect(memorize().byteSize()).toBe(0);
+    });
+
+    it('byteSize() is positive after caching via set()', () => {
+      const cache = memorize();
+      cache.set('key', { data: 'hello' });
+      expect(cache.byteSize()).toBeGreaterThan(0);
+    });
+
+    it('getStats() returns correct shape', () => {
+      const cache = memorize({ maxEntries: 10 });
+      cache.set('key', 'value');
+      const stats = cache.getStats();
+      expect(stats.entries).toBe(1);
+      expect(stats.maxEntries).toBe(10);
+      expect(stats.byteSize).toBeGreaterThan(0);
+    });
+
+    it('getStats() maxEntries is null when not configured', () => {
+      expect(memorize().getStats().maxEntries).toBeNull();
+    });
+  });
+
+  describe('maxEntries', () => {
+    it('evicts LRU entry when limit is reached', () => {
+      const cache = memorize({ maxEntries: 2 });
+      cache.set('/a', 'a');
+      cache.set('/b', 'b');
+      cache.set('/c', 'c'); // evicts /a
+      expect(cache.getValue('/a')).toBeUndefined();
+      expect(cache.getValue('/b')).toBe('b');
+      expect(cache.getValue('/c')).toBe('c');
+    });
+
+    it('emits Evict event', () => {
+      const cache = memorize({ maxEntries: 1 });
+      const evicted: string[] = [];
+      cache.on(MemorizeEventType.Evict, (e) => evicted.push(e.key));
+      cache.set('/a', 'a');
+      cache.set('/b', 'b');
+      expect(evicted).toEqual(['/a']);
     });
   });
 });

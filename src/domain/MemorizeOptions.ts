@@ -12,4 +12,17 @@ export interface MemorizeOptions {
    * Omit to cache indefinitely. Can be overridden per-route via {@link MemorizeCallOptions}.
    */
   ttl?: number;
+
+  /**
+   * Maximum number of entries the cache may hold at any time.
+   *
+   * When the limit is reached, the least-recently-used (LRU) entry is evicted
+   * before the new one is stored. Omit for an unlimited cache.
+   *
+   * @example
+   * ```ts
+   * const cache = memorize({ maxEntries: 1_000 });
+   * ```
+   */
+  maxEntries?: number;
 }
