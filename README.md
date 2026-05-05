@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  In-memory HTTP cache for <strong>Express, Hono, Fetch API</strong>, and more.<br/>
+  In-memory HTTP cache for <strong>Express, NestJS, Hono, Fetch API</strong>, and more.<br/>
   Caches <code>GET</code> responses with optional TTL — zero dependencies, fully typed.
 </p>
 
@@ -18,7 +18,7 @@
 ## Features
 
 - Caches `GET` responses automatically when status code is `2xx`
-- Works with **Express**, **Hono**, **Fetch API / serverless**, and direct service-level usage
+- Works with **Express**, **NestJS**, **Hono**, **Fetch API / serverless**, and direct service-level usage
 - Per-route TTL override and `noCache` bypass
 - **`maxEntries` cap with LRU eviction** to bound memory usage
 - **Size metrics**: `size()`, `byteSize()`, `getStats()`
@@ -39,6 +39,7 @@ Adapters for non-Express runtimes are optional — install only what you need:
 
 ```bash
 npm install hono   # only if using the Hono adapter
+npm install @nestjs/common @nestjs/core rxjs   # only if using the NestJS adapter
 ```
 
 ## Quick Start
@@ -73,6 +74,38 @@ const cache = memorize({ ttl: 30_000 });
 app.get('/users', createHonoMiddleware(cache), async (c) => {
   return c.json(await usersService.findAll());
 });
+```
+
+### NestJS
+
+```typescript
+import { Module } from '@nestjs/common';
+import { APP_INTERCEPTOR } from '@nestjs/core';
+import {
+  MemorizeCacheKey,
+  MemorizeInterceptor,
+  MemorizeModule,
+  MemorizeTtl,
+} from 'express-memorize/nestjs';
+
+@Module({
+  imports: [MemorizeModule.forRoot({ ttl: 30_000 })],
+  providers: [
+    {
+      provide: APP_INTERCEPTOR,
+      useExisting: MemorizeInterceptor,
+    },
+  ],
+})
+export class AppModule {}
+
+export class UsersController {
+  @MemorizeCacheKey('users:list')
+  @MemorizeTtl(10_000)
+  findAll() {
+    return usersService.findAll();
+  }
+}
 ```
 
 ### Fetch API / Serverless
@@ -132,6 +165,39 @@ app.get('/config',   cache({ ttl: 0 }),      handler); // no expiry
 app.get('/live-feed', cache({ noCache: true }), handler);
 // Sets X-Cache: BYPASS, never reads or writes the cache
 ```
+
+### NestJS decorators
+
+Use `MemorizeInterceptor` on a controller or globally, then configure caching at the controller or method level.
+
+```typescript
+import { Controller, Get, UseInterceptors } from '@nestjs/common';
+import {
+  MemorizeCacheKey,
+  MemorizeInterceptor,
+  MemorizeNoCache,
+  MemorizeTtl,
+} from 'express-memorize/nestjs';
+
+@Controller('users')
+@UseInterceptors(MemorizeInterceptor)
+@MemorizeTtl(30_000)
+export class UsersController {
+  @Get()
+  @MemorizeCacheKey('users:list')
+  findAll() {
+    return usersService.findAll();
+  }
+
+  @Get('live')
+  @MemorizeNoCache()
+  live() {
+    return usersService.live();
+  }
+}
+```
+
+For global usage, import `MemorizeModule.forRoot()` and register `APP_INTERCEPTOR` with `useExisting: MemorizeInterceptor` so the interceptor receives the module's shared cache instance.
 
 ### Cache invalidation
 
@@ -267,6 +333,7 @@ Returns an Express `RequestHandler`. `cache()` is a backwards-compatible alias f
 |-------------|--------|-----------|
 | `express-memorize` | `memorize` | Core factory |
 | `express-memorize/express` | `createExpressAdapter(cache, options?)` | Express |
+| `express-memorize/nestjs` | `MemorizeModule`, `MemorizeInterceptor`, decorators | NestJS |
 | `express-memorize/hono` | `createHonoMiddleware(cache, options?)` | Hono |
 | `express-memorize/fetch` | `cacheFetchHandler(cache, handler, options?)` | Fetch API / Serverless |
 
