@@ -286,4 +286,136 @@ describe('MemorizeStore', () => {
       expect(all['/alive']).toBeDefined();
     });
   });
+
+  describe('size / byteSize / getStats', () => {
+    it('size() returns number of active entries', () => {
+      store.set('/a', entry('x'));
+      store.set('/b', entry('y'));
+      expect(store.size()).toBe(2);
+    });
+
+    it('size() decrements after delete', () => {
+      store.set('/a', entry('x'));
+      store.delete('/a');
+      expect(store.size()).toBe(0);
+    });
+
+    it('byteSize() reflects stored string bodies', () => {
+      store.set('/a', entry('hello'));
+      expect(store.byteSize()).toBe(Buffer.byteLength('hello'));
+    });
+
+    it('byteSize() accumulates across entries', () => {
+      store.set('/a', entry('abc'));
+      store.set('/b', entry('de'));
+      expect(store.byteSize()).toBe(Buffer.byteLength('abc') + Buffer.byteLength('de'));
+    });
+
+    it('byteSize() decrements after delete', () => {
+      store.set('/a', entry('hello'));
+      store.delete('/a');
+      expect(store.byteSize()).toBe(0);
+    });
+
+    it('byteSize() updates when key is overwritten', () => {
+      store.set('/a', entry('hi'));
+      store.set('/a', entry('longer value'));
+      expect(store.byteSize()).toBe(Buffer.byteLength('longer value'));
+    });
+
+    it('getStats() returns correct shape', () => {
+      store.set('/a', entry('x'));
+      const stats = store.getStats();
+      expect(stats.entries).toBe(1);
+      expect(stats.maxEntries).toBeNull();
+      expect(stats.byteSize).toBeGreaterThan(0);
+    });
+
+    it('getStats() reflects maxEntries when configured', () => {
+      const s = new MemorizeStore(5);
+      s.set('/a', entry('x'));
+      expect(s.getStats().maxEntries).toBe(5);
+    });
+
+    it('CacheInfo includes size field', () => {
+      store.set('/a', entry('hello'));
+      const info = store.get('/a');
+      expect(info!.size).toBe(Buffer.byteLength('hello'));
+    });
+  });
+
+  describe('maxEntries / LRU eviction', () => {
+    it('does not evict when below limit', () => {
+      const s = new MemorizeStore(3);
+      s.set('/a', entry());
+      s.set('/b', entry());
+      expect(s.size()).toBe(2);
+    });
+
+    it('evicts the LRU entry when maxEntries is reached', () => {
+      const s = new MemorizeStore(2);
+      s.set('/a', entry());
+      s.set('/b', entry());
+      s.set('/c', entry()); // /a should be evicted (LRU)
+      expect(s.get('/a')).toBeNull();
+      expect(s.get('/b')).not.toBeNull();
+      expect(s.get('/c')).not.toBeNull();
+    });
+
+    it('does not exceed maxEntries after multiple sets', () => {
+      const s = new MemorizeStore(3);
+      ['/a', '/b', '/c', '/d', '/e'].forEach((k) => s.set(k, entry()));
+      expect(s.size()).toBe(3);
+    });
+
+    it('accessing a key makes it MRU (not evicted first)', () => {
+      const s = new MemorizeStore(2);
+      s.set('/a', entry());
+      s.set('/b', entry());
+      s.getRaw('/a'); // promote /a to MRU
+      s.set('/c', entry()); // /b should be evicted, not /a
+      expect(s.get('/a')).not.toBeNull();
+      expect(s.get('/b')).toBeNull();
+      expect(s.get('/c')).not.toBeNull();
+    });
+
+    it('re-setting an existing key does not evict when at limit', () => {
+      const s = new MemorizeStore(2);
+      s.set('/a', entry());
+      s.set('/b', entry());
+      s.set('/a', entry('updated')); // overwrite, not a new entry
+      expect(s.size()).toBe(2);
+      expect(s.get('/a')!.body).toBe('updated');
+    });
+
+    it('clears TTL timer of evicted entry', () => {
+      jest.useFakeTimers();
+      const s = new MemorizeStore(2);
+      s.set('/a', entry(), 10_000);
+      s.set('/b', entry());
+      s.set('/c', entry()); // evicts /a
+      // Timer for /a should be cleared; advancing time should not throw
+      jest.advanceTimersByTime(10_001);
+      expect(s.get('/a')).toBeNull();
+      jest.useRealTimers();
+    });
+
+    it('emits Evict event when entry is evicted', () => {
+      const s = new MemorizeStore(1);
+      const evicted: string[] = [];
+      s.on(MemorizeEventType.Evict, (e) => evicted.push(e.key));
+      s.set('/a', entry());
+      s.set('/b', entry()); // evicts /a
+      expect(evicted).toEqual(['/a']);
+    });
+
+    it('byteSize stays consistent after LRU eviction', () => {
+      const s = new MemorizeStore(2);
+      s.set('/a', entry('aaaa'));
+      s.set('/b', entry('bb'));
+      const beforeEviction = s.byteSize();
+      s.set('/c', entry('ccc')); // evicts /a
+      expect(s.byteSize()).toBe(beforeEviction - Buffer.byteLength('aaaa') + Buffer.byteLength('ccc'));
+    });
+  });
 });

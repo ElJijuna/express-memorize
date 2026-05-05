@@ -12,4 +12,6 @@ export interface CacheEntry {
   expiresAt: number | null;
   /** Number of times this entry has been requested (including the initial cache miss). */
   hits: number;
+  /** Approximate size of the cached body in bytes. */
+  size: number;
 }

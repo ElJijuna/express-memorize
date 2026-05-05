@@ -6,6 +6,8 @@ export type { MemorizeSetEvent } from './MemorizeSetEvent';
 export type { MemorizeDeleteEvent } from './MemorizeDeleteEvent';
 export type { MemorizeExpireEvent } from './MemorizeExpireEvent';
 export type { MemorizeEmptyEvent } from './MemorizeEmptyEvent';
+export type { MemorizeEvictEvent } from './MemorizeEvictEvent';
+export type { MemorizeStats } from './MemorizeStats';
 export type { MemorizeOptions } from './MemorizeOptions';
 export type { MemorizeCallOptions } from './MemorizeCallOptions';
 export type { Memorize } from './Memorize';
