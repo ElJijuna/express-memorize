@@ -18,6 +18,10 @@
       "types": "./dist/adapters/hono.d.ts",
       "default": "./dist/adapters/hono.js"
     },
+    "./nestjs": {
+      "types": "./dist/adapters/nestjs.d.ts",
+      "default": "./dist/adapters/nestjs.js"
+    },
     "./fetch": {
       "types": "./dist/adapters/fetch.d.ts",
       "default": "./dist/adapters/fetch.js"
@@ -56,11 +60,23 @@
   ],
   "license": "MIT",
   "peerDependencies": {
+    "@nestjs/common": ">=9.0.0",
+    "@nestjs/core": ">=9.0.0",
     "express": ">=4.0.0",
-    "hono": ">=4.0.0"
+    "hono": ">=4.0.0",
+    "rxjs": ">=7.0.0"
   },
   "peerDependenciesMeta": {
+    "@nestjs/common": {
+      "optional": true
+    },
+    "@nestjs/core": {
+      "optional": true
+    },
     "hono": {
+      "optional": true
+    },
+    "rxjs": {
       "optional": true
     }
   },
