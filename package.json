@@ -1,6 +1,6 @@
 {
   "name": "express-memorize",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "In-memory cache middleware for Express.js. Caches GET responses with optional TTL — zero dependencies, fully typed.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
