@@ -8,7 +8,7 @@ export interface CacheEntry {
   statusCode: number;
   /** Value of the `Content-Type` response header (e.g. `application/json; charset=utf-8`). */
   contentType: string;
-  /** Unix timestamp (ms) at which the entry expires, or `null` if it never expires. */
+  /** Unix timestamp (ms) at which the entry expires, or `null` when TTL is `Infinity`. */
   expiresAt: number | null;
   /** Number of times this entry has been requested (including the initial cache miss). */
   hits: number;

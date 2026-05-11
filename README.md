@@ -154,9 +154,9 @@ app.use(cache()); // applies to all GET routes
 ```typescript
 const cache = memorize({ ttl: 60_000 }); // global: 60s
 
-app.get('/users',    cache(),               handler); // 60s
-app.get('/products', cache({ ttl: 10_000 }), handler); // 10s
-app.get('/config',   cache({ ttl: 0 }),      handler); // no expiry
+app.get('/users',    cache(),                  handler); // 60s
+app.get('/products', cache({ ttl: 10_000 }),    handler); // 10s
+app.get('/config',   cache({ ttl: Infinity }),  handler); // no expiry
 ```
 
 ### noCache bypass
@@ -264,7 +264,7 @@ cache.getAll();        // Record<string, CacheInfo>
   statusCode: number;
   contentType: string;
   expiresAt: number | null;
-  remainingTtl: number | null; // ms until expiry, null if no TTL
+  remainingTtl: number | null; // ms until expiry, null when ttl is Infinity
   hits: number;                // times this key was served from cache
   size: number;                // approximate body size in bytes
 }
@@ -294,7 +294,7 @@ Creates a cache instance. Returns a `Memorize` object.
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `ttl` | `number` | `undefined` | Time-to-live in milliseconds. Omit for no expiry. |
+| `ttl` | `number` | `60_000` | Time-to-live in milliseconds. Pass `Infinity` for no expiry. |
 | `maxEntries` | `number` | `undefined` | Maximum number of entries. LRU eviction when reached. |
 
 ### `cache(options?)` / `cache.express(options?)`
@@ -303,7 +303,7 @@ Returns an Express `RequestHandler`. `cache()` is a backwards-compatible alias f
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `ttl` | `number` | global `ttl` | TTL override for this route. |
+| `ttl` | `number` | global `ttl` | TTL override for this route. Pass `Infinity` for no expiry. |
 | `noCache` | `boolean` | `false` | Skip cache entirely. Sets `X-Cache: BYPASS`. |
 
 ### Service-level cache methods

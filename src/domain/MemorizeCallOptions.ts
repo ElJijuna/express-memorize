@@ -11,7 +11,8 @@ export interface MemorizeCallOptions {
   /**
    * Time-to-live override for this specific route, in milliseconds.
    * Takes precedence over the global `ttl` set in {@link MemorizeOptions}.
-   * Pass `0` or omit to fall back to the global TTL.
+   * Omit to fall back to the global TTL. Pass `Infinity` to cache indefinitely.
+   * Pass `0` to expire immediately.
    */
   ttl?: number;
   /**

@@ -31,6 +31,8 @@ type ListenerMap = {
   [MemorizeEventType.Evict]:  Array<(e: MemorizeEvictEvent) => void>;
 };
 
+const DEFAULT_TTL = 60_000;
+
 function estimateByteSize(value: unknown): number {
   if (typeof value === 'string') return Buffer.byteLength(value);
   if (Buffer.isBuffer(value)) return value.byteLength;
@@ -41,6 +43,24 @@ function estimateByteSize(value: unknown): number {
   } catch {
     return 0;
   }
+}
+
+function normalizeTtl(ttl?: number | null): { expiresAt: number | null; timerTtl: number | null } {
+  if (ttl === Infinity) {
+    return { expiresAt: null, timerTtl: null };
+  }
+
+  const effectiveTtl = ttl ?? DEFAULT_TTL;
+
+  if (typeof effectiveTtl !== 'number' || Number.isNaN(effectiveTtl) || !Number.isFinite(effectiveTtl)) {
+    throw new TypeError('ttl must be a finite number or Infinity');
+  }
+
+  if (effectiveTtl < 0) {
+    throw new RangeError('ttl must be greater than or equal to 0');
+  }
+
+  return { expiresAt: Date.now() + effectiveTtl, timerTtl: effectiveTtl };
 }
 
 /**
@@ -94,7 +114,8 @@ export class MemorizeStore {
    *
    * @param key - The cache key (typically `req.originalUrl`).
    * @param entry - The response data to store.
-   * @param ttl - Time-to-live in milliseconds. Omit or pass `null` for no expiry.
+   * @param ttl - Time-to-live in milliseconds. Omit or pass `null` to use the default TTL.
+   * Pass `Infinity` for no expiry.
    */
   set(key: string, entry: Omit<CacheEntry, 'expiresAt' | 'hits' | 'size'>, ttl?: number | null): void {
     if (this._maxEntries && !this._store.has(key) && this._store.size >= this._maxEntries) {
@@ -111,7 +132,7 @@ export class MemorizeStore {
       this._totalByteSize -= existing.size;
     }
 
-    const expiresAt = ttl ? Date.now() + ttl : null;
+    const { expiresAt, timerTtl } = normalizeTtl(ttl);
     const size = estimateByteSize(entry.body);
     const stored: CacheEntry = { ...entry, expiresAt, hits: 1, size };
     this._store.set(key, stored);
@@ -119,10 +140,10 @@ export class MemorizeStore {
 
     this._emit(MemorizeEventType.Set, { type: MemorizeEventType.Set, key, ...entry, expiresAt, size });
 
-    if (ttl) {
+    if (timerTtl !== null) {
       const timer = setTimeout(() => {
         this._evict(key, MemorizeEventType.Expire);
-      }, ttl);
+      }, timerTtl);
 
       if (typeof timer === 'object' && 'unref' in timer) timer.unref();
       this._timers.set(key, timer);
@@ -139,7 +160,7 @@ export class MemorizeStore {
     const entry = this._store.get(key);
     if (!entry) return null;
 
-    if (entry.expiresAt && Date.now() > entry.expiresAt) {
+    if (entry.expiresAt && Date.now() >= entry.expiresAt) {
       this._evict(key, MemorizeEventType.Expire);
       return null;
     }
@@ -155,7 +176,7 @@ export class MemorizeStore {
     const result: Record<string, CacheInfo> = {};
 
     for (const [key, entry] of this._store) {
-      if (entry.expiresAt && Date.now() > entry.expiresAt) {
+      if (entry.expiresAt && Date.now() >= entry.expiresAt) {
         this._evict(key, MemorizeEventType.Expire);
         continue;
       }
@@ -250,7 +271,7 @@ export class MemorizeStore {
     const entry = this._store.get(key);
     if (!entry) return null;
 
-    if (entry.expiresAt && Date.now() > entry.expiresAt) {
+    if (entry.expiresAt && Date.now() >= entry.expiresAt) {
       this._evict(key, MemorizeEventType.Expire);
       return null;
     }

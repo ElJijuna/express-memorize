@@ -20,7 +20,7 @@ export interface MemorizeSetEvent {
   statusCode: number;
   /** `Content-Type` header value of the stored response. */
   contentType: string;
-  /** Expiry timestamp in ms, or `null` if no TTL was set. */
+  /** Expiry timestamp in ms, or `null` when TTL is `Infinity`. */
   expiresAt: number | null;
   /** Approximate byte size of the cached body. */
   size: number;
