@@ -1,3 +1,16 @@
+# [1.5.0](https://github.com/ElJijuna/express-memorize/compare/v1.4.0...v1.5.0) (2026-05-11)
+
+
+### Features
+
+* add framework-agnostic cache API and Express adapter architecture ([78b605d](https://github.com/ElJijuna/express-memorize/commit/78b605d1dc33a361f31339c661f5a527bda47a02)), closes [#6](https://github.com/ElJijuna/express-memorize/issues/6)
+* add generic Fetch API cache adapter ([b36bf48](https://github.com/ElJijuna/express-memorize/commit/b36bf489c5a92cef05a2551df37b3d014d3588db)), closes [#12](https://github.com/ElJijuna/express-memorize/issues/12)
+* add Hono adapter for edge/serverless runtimes ([eb2f967](https://github.com/ElJijuna/express-memorize/commit/eb2f9675cb8f668bad76a88aabb19b622d83fac3)), closes [#13](https://github.com/ElJijuna/express-memorize/issues/13)
+* add Infinity TTL support and finite default TTL ([e353785](https://github.com/ElJijuna/express-memorize/commit/e353785966e3ae425610cba200df6f89691beaa0))
+* add maxEntries limit, LRU eviction, and cache size metrics ([14e4c5a](https://github.com/ElJijuna/express-memorize/commit/14e4c5a670d9bd2dcb253130b89f994988dfe466)), closes [#14](https://github.com/ElJijuna/express-memorize/issues/14)
+* configure package exports for tree-shaking and adapter subpaths ([14d4dcc](https://github.com/ElJijuna/express-memorize/commit/14d4dccd145d02e3966a8f977f0cf719c7123e81)), closes [#10](https://github.com/ElJijuna/express-memorize/issues/10)
+* **nestjs:** add cache interceptor adapter (closes [#7](https://github.com/ElJijuna/express-memorize/issues/7)) ([f1b9707](https://github.com/ElJijuna/express-memorize/commit/f1b970792123062dc32d464d2ccb1ccea7a3d7a1))
+
 # Changelog
 
 All notable changes to this project will be documented in this file.
