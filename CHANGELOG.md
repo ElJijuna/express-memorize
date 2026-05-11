@@ -1,3 +1,10 @@
+# [2.1.0](https://github.com/ElJijuna/express-memorize/compare/v2.0.0...v2.1.0) (2026-05-11)
+
+
+### Features
+
+* add Infinity TTL support and finite default TTL ([e353785](https://github.com/ElJijuna/express-memorize/commit/e353785966e3ae425610cba200df6f89691beaa0))
+
 # Changelog
 
 All notable changes to this project will be documented in this file.
