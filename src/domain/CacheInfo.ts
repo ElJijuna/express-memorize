@@ -7,6 +7,6 @@ import { CacheEntry } from './CacheEntry';
 export interface CacheInfo extends CacheEntry {
   /** The cache key — the full request path including query string (e.g. `/users?page=1`). */
   key: string;
-  /** Milliseconds remaining until the entry expires. `null` if the entry has no TTL. */
+  /** Milliseconds remaining until the entry expires. `null` when TTL is `Infinity`. */
   remainingTtl: number | null;
 }

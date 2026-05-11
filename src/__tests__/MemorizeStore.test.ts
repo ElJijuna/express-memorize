@@ -37,9 +37,14 @@ describe('MemorizeStore', () => {
       expect(store.get('/users')!.body).toBe('second');
     });
 
-    it('remainingTtl is null when no TTL is set', () => {
+    it('uses a finite default TTL when no TTL is set', () => {
+      jest.useFakeTimers();
       store.set('/users', entry());
-      expect(store.get('/users')!.remainingTtl).toBeNull();
+      const remainingTtl = store.get('/users')!.remainingTtl;
+
+      expect(remainingTtl).not.toBeNull();
+      expect(remainingTtl).toBeGreaterThan(0);
+      jest.useRealTimers();
     });
   });
 
@@ -269,11 +274,38 @@ describe('MemorizeStore', () => {
       expect(store.get('/users')!.body).toBe('v2');
     });
 
-    it('entries without TTL never expire', () => {
+    it('entries without TTL use the default finite TTL', () => {
       store.set('/users', entry());
-      jest.advanceTimersByTime(9_999_999);
+      jest.advanceTimersByTime(59_999);
 
       expect(store.get('/users')).not.toBeNull();
+
+      jest.advanceTimersByTime(2);
+      expect(store.get('/users')).toBeNull();
+    });
+
+    it('only Infinity creates an entry without expiry', () => {
+      store.set('/users', entry(), Infinity);
+      jest.advanceTimersByTime(9_999_999);
+
+      const info = store.get('/users');
+      expect(info).not.toBeNull();
+      expect(info!.remainingTtl).toBeNull();
+      expect(info!.expiresAt).toBeNull();
+    });
+
+    it('ttl 0 expires immediately instead of creating an infinite entry', () => {
+      store.set('/users', entry(), 0);
+
+      expect(store.get('/users')).toBeNull();
+    });
+
+    it('rejects negative TTL values', () => {
+      expect(() => store.set('/users', entry(), -1)).toThrow(RangeError);
+    });
+
+    it('rejects NaN TTL values', () => {
+      expect(() => store.set('/users', entry(), NaN)).toThrow(TypeError);
     });
 
     it('expired entries are excluded from getAll', () => {

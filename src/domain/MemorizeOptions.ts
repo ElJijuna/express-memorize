@@ -9,7 +9,8 @@
 export interface MemorizeOptions {
   /**
    * Default time-to-live for every cached entry, in milliseconds.
-   * Omit to cache indefinitely. Can be overridden per-route via {@link MemorizeCallOptions}.
+   * Omit to use the store's finite default TTL. Pass `Infinity` to cache indefinitely.
+   * Can be overridden per-route via {@link MemorizeCallOptions}.
    */
   ttl?: number;
 

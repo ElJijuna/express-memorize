@@ -93,5 +93,8 @@
     "typedoc-material-theme": "^1.4.1",
     "typescript": "^5.0.0"
   },
-  "author": "pilmee <pilmee@gmail.com> (https://github.com/ElJijuna)"
+  "author": "pilmee <pilmee@gmail.com> (https://github.com/ElJijuna)",
+  "publishConfig": {
+    "access": "public"
+  }
 }
