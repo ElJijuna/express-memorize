@@ -18,6 +18,10 @@
       "types": "./dist/adapters/hono.d.ts",
       "default": "./dist/adapters/hono.js"
     },
+    "./fastify": {
+      "types": "./dist/adapters/fastify.d.ts",
+      "default": "./dist/adapters/fastify.js"
+    },
     "./nestjs": {
       "types": "./dist/adapters/nestjs.d.ts",
       "default": "./dist/adapters/nestjs.js"
@@ -63,6 +67,7 @@
     "@nestjs/common": ">=9.0.0",
     "@nestjs/core": ">=9.0.0",
     "express": ">=4.0.0",
+    "fastify": ">=4.0.0",
     "hono": ">=4.0.0",
     "rxjs": ">=7.0.0"
   },
@@ -71,6 +76,9 @@
       "optional": true
     },
     "@nestjs/core": {
+      "optional": true
+    },
+    "fastify": {
       "optional": true
     },
     "hono": {
@@ -85,6 +93,7 @@
     "@types/express": "^4.17.21",
     "@types/jest": "^29.0.0",
     "@types/node": "^20.0.0",
+    "fastify": "^5.6.2",
     "hono": "^4.12.16",
     "jest": "^29.0.0",
     "semantic-release": "^24.2.9",
