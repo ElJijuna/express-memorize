@@ -254,4 +254,11 @@ export interface Memorize {
    * @internal
    */
   _store: MemorizeStore;
+
+  /**
+   * Global TTL configured through `memorize({ ttl })`. Intended for use by
+   * framework adapters only.
+   * @internal
+   */
+  _ttl?: number;
 }

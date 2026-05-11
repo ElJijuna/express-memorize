@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  In-memory HTTP cache for <strong>Express, NestJS, Hono, Fetch API</strong>, and more.<br/>
+  In-memory HTTP cache for <strong>Express, Fastify, NestJS, Hono, Fetch API</strong>, and more.<br/>
   Caches <code>GET</code> responses with optional TTL — zero dependencies, fully typed.
 </p>
 
@@ -18,7 +18,7 @@
 ## Features
 
 - Caches `GET` responses automatically when status code is `2xx`
-- Works with **Express**, **NestJS**, **Hono**, **Fetch API / serverless**, and direct service-level usage
+- Works with **Express**, **Fastify**, **NestJS**, **Hono**, **Fetch API / serverless**, and direct service-level usage
 - Per-route TTL override and `noCache` bypass
 - **`maxEntries` cap with LRU eviction** to bound memory usage
 - **Size metrics**: `size()`, `byteSize()`, `getStats()`
@@ -38,6 +38,7 @@ npm install express-memorize
 Adapters for non-Express runtimes are optional — install only what you need:
 
 ```bash
+npm install fastify   # only if using the Fastify adapter
 npm install hono   # only if using the Hono adapter
 npm install @nestjs/common @nestjs/core rxjs   # only if using the NestJS adapter
 ```
@@ -59,6 +60,23 @@ app.get('/users', cache(), async (req, res) => {
 });
 
 app.listen(3000);
+```
+
+### Fastify
+
+```typescript
+import Fastify from 'fastify';
+import { memorize } from 'express-memorize';
+import { createFastifyPlugin } from 'express-memorize/fastify';
+
+const app = Fastify();
+const cache = memorize({ ttl: 30_000 });
+
+await app.register(createFastifyPlugin(cache));
+
+app.get('/users', async () => {
+  return usersService.findAll();
+});
 ```
 
 ### Hono
@@ -164,6 +182,20 @@ app.get('/config',   cache({ ttl: Infinity }),  handler); // no expiry
 ```typescript
 app.get('/live-feed', cache({ noCache: true }), handler);
 // Sets X-Cache: BYPASS, never reads or writes the cache
+```
+
+### Fastify route-level usage
+
+```typescript
+import { createFastifyPreHandler } from 'express-memorize/fastify';
+
+app.get(
+  '/users',
+  {
+    preHandler: createFastifyPreHandler(cache, { ttl: 10_000 }),
+  },
+  async () => usersService.findAll(),
+);
 ```
 
 ### NestJS decorators
@@ -333,6 +365,7 @@ Returns an Express `RequestHandler`. `cache()` is a backwards-compatible alias f
 |-------------|--------|-----------|
 | `express-memorize` | `memorize` | Core factory |
 | `express-memorize/express` | `createExpressAdapter(cache, options?)` | Express |
+| `express-memorize/fastify` | `createFastifyPlugin(cache, options?)`, `createFastifyPreHandler(cache, options?)` | Fastify |
 | `express-memorize/nestjs` | `MemorizeModule`, `MemorizeInterceptor`, decorators | NestJS |
 | `express-memorize/hono` | `createHonoMiddleware(cache, options?)` | Hono |
 | `express-memorize/fetch` | `cacheFetchHandler(cache, handler, options?)` | Fetch API / Serverless |

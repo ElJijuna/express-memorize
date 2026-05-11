@@ -99,6 +99,7 @@ export function memorize(options: MemorizeOptions = {}): Memorize {
   cache.byteSize       = () => store.byteSize();
   cache.getStats       = () => store.getStats();
   cache._store         = store;
+  cache._ttl           = ttl;
 
   return cache;
 }
