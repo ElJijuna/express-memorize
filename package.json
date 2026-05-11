@@ -22,6 +22,10 @@
       "types": "./dist/adapters/fastify.d.ts",
       "default": "./dist/adapters/fastify.js"
     },
+    "./koa": {
+      "types": "./dist/adapters/koa.d.ts",
+      "default": "./dist/adapters/koa.js"
+    },
     "./nestjs": {
       "types": "./dist/adapters/nestjs.d.ts",
       "default": "./dist/adapters/nestjs.js"
@@ -64,14 +68,19 @@
   ],
   "license": "MIT",
   "peerDependencies": {
+    "@koa/router": ">=10.0.0",
     "@nestjs/common": ">=9.0.0",
     "@nestjs/core": ">=9.0.0",
     "express": ">=4.0.0",
     "fastify": ">=4.0.0",
     "hono": ">=4.0.0",
+    "koa": ">=2.0.0",
     "rxjs": ">=7.0.0"
   },
   "peerDependenciesMeta": {
+    "@koa/router": {
+      "optional": true
+    },
     "@nestjs/common": {
       "optional": true
     },
@@ -84,18 +93,24 @@
     "hono": {
       "optional": true
     },
+    "koa": {
+      "optional": true
+    },
     "rxjs": {
       "optional": true
     }
   },
   "devDependencies": {
+    "@koa/router": "^15.5.0",
     "@semantic-release/changelog": "^6.0.3",
     "@types/express": "^4.17.21",
     "@types/jest": "^29.0.0",
+    "@types/koa": "^3.0.2",
     "@types/node": "^20.0.0",
     "fastify": "^5.6.2",
     "hono": "^4.12.16",
     "jest": "^29.0.0",
+    "koa": "^3.2.0",
     "semantic-release": "^24.2.9",
     "ts-jest": "^29.0.0",
     "typedoc": "^0.28.18",

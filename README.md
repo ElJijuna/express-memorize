@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  In-memory HTTP cache for <strong>Express, Fastify, NestJS, Hono, Fetch API</strong>, and more.<br/>
+  In-memory HTTP cache for <strong>Express, Fastify, Koa, NestJS, Hono, Fetch API</strong>, and more.<br/>
   Caches <code>GET</code> responses with optional TTL — zero dependencies, fully typed.
 </p>
 
@@ -18,7 +18,7 @@
 ## Features
 
 - Caches `GET` responses automatically when status code is `2xx`
-- Works with **Express**, **Fastify**, **NestJS**, **Hono**, **Fetch API / serverless**, and direct service-level usage
+- Works with **Express**, **Fastify**, **Koa**, **NestJS**, **Hono**, **Fetch API / serverless**, and direct service-level usage
 - Per-route TTL override and `noCache` bypass
 - **`maxEntries` cap with LRU eviction** to bound memory usage
 - **Size metrics**: `size()`, `byteSize()`, `getStats()`
@@ -39,6 +39,7 @@ Adapters for non-Express runtimes are optional — install only what you need:
 
 ```bash
 npm install fastify   # only if using the Fastify adapter
+npm install koa @koa/router   # only if using the Koa adapter
 npm install hono   # only if using the Hono adapter
 npm install @nestjs/common @nestjs/core rxjs   # only if using the NestJS adapter
 ```
@@ -77,6 +78,26 @@ await app.register(createFastifyPlugin(cache));
 app.get('/users', async () => {
   return usersService.findAll();
 });
+```
+
+### Koa
+
+```typescript
+import Koa from 'koa';
+import Router from '@koa/router';
+import { memorize } from 'express-memorize';
+import { createKoaMiddleware } from 'express-memorize/koa';
+
+const app = new Koa();
+const router = new Router();
+const cache = memorize({ ttl: 30_000 });
+
+router.get('/users', createKoaMiddleware(cache), async (ctx) => {
+  ctx.body = await usersService.findAll();
+});
+
+app.use(router.routes());
+app.use(router.allowedMethods());
 ```
 
 ### Hono
@@ -366,6 +387,7 @@ Returns an Express `RequestHandler`. `cache()` is a backwards-compatible alias f
 | `express-memorize` | `memorize` | Core factory |
 | `express-memorize/express` | `createExpressAdapter(cache, options?)` | Express |
 | `express-memorize/fastify` | `createFastifyPlugin(cache, options?)`, `createFastifyPreHandler(cache, options?)` | Fastify |
+| `express-memorize/koa` | `createKoaMiddleware(cache, options?)` | Koa |
 | `express-memorize/nestjs` | `MemorizeModule`, `MemorizeInterceptor`, decorators | NestJS |
 | `express-memorize/hono` | `createHonoMiddleware(cache, options?)` | Hono |
 | `express-memorize/fetch` | `cacheFetchHandler(cache, handler, options?)` | Fetch API / Serverless |
