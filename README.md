@@ -219,6 +219,51 @@ app.get(
 );
 ```
 
+### GraphQL caching
+
+GraphQL is not a simple route-level caching problem. A single `POST /graphql`
+endpoint can execute different operations, use variables, depend on the current
+viewer, and return partial data with errors. For now, the recommended strategy
+is **service-level caching** with `remember()` inside resolvers or the services
+they call.
+
+```typescript
+const cache = memorize({ ttl: 30_000 });
+
+const resolvers = {
+  Query: {
+    user: (_parent, args, context) => {
+      const viewerScope = context.user ? `user:${context.user.id}` : 'anonymous';
+      return cache.remember(
+        `graphql:${viewerScope}:user:${args.id}`,
+        () => usersService.findVisibleById(args.id, context.user),
+      );
+    },
+  },
+  Mutation: {
+    updateUser: async (_parent, args) => {
+      const user = await usersService.update(args.id, args.input);
+      cache.deleteMatching(`graphql:*:user:${args.id}`);
+      return user;
+    },
+  },
+};
+```
+
+**GraphQL cache key rules:**
+
+- Include every input that can change the result: operation name, normalized query or field name, variables, locale, feature flags, and any relevant authorization scope.
+- Do not share cached data across users unless the resolver result is genuinely public.
+- Keep mutation invalidation explicit with `delete()` or `deleteMatching()`; automatic invalidation is too schema-specific for a generic adapter.
+- Avoid caching responses that contain GraphQL errors unless your application has a deliberate policy for partial data.
+- Prefer resolver or service-level caching for expensive data fetches. Operation-level caching may be considered later for public, query-only workloads with strict keying rules.
+
+There is currently no dedicated GraphQL adapter. If one is added later, the
+first practical target should be **Apollo Server**, because its plugin lifecycle
+can cache complete operation responses without coupling the core package entry
+point to GraphQL. NestJS GraphQL, Mercurius, and Yoga integrations should stay
+separate implementation issues unless a shared GraphQL abstraction emerges.
+
 ### NestJS decorators
 
 Use `MemorizeInterceptor` on a controller or globally, then configure caching at the controller or method level.
