@@ -1,3 +1,11 @@
+# [2.2.0](https://github.com/ElJijuna/express-memorize/compare/v2.1.0...v2.2.0) (2026-05-11)
+
+
+### Features
+
+* **fastify:** add Fastify cache adapter (Closes [#9](https://github.com/ElJijuna/express-memorize/issues/9)) ([9b940cd](https://github.com/ElJijuna/express-memorize/commit/9b940cdc4a15c27d17264a497c29d32bde09e523))
+* **koa:** add Koa cache adapter (Closes [#8](https://github.com/ElJijuna/express-memorize/issues/8)) ([39673fc](https://github.com/ElJijuna/express-memorize/commit/39673fcd92b5cb5d57560adb982cf1d4b85d4eb5))
+
 # [2.1.0](https://github.com/ElJijuna/express-memorize/compare/v2.0.0...v2.1.0) (2026-05-11)
 
 
