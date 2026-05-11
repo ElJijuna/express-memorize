@@ -13,6 +13,15 @@
   Caches <code>GET</code> responses with optional TTL — zero dependencies, fully typed.
 </p>
 
+<p align="center">
+  <a href="#express"><img src="https://img.shields.io/badge/Express-000000?logo=express&logoColor=white" alt="Express adapter" /></a>
+  <a href="#fastify"><img src="https://img.shields.io/badge/Fastify-000000?logo=fastify&logoColor=white" alt="Fastify adapter" /></a>
+  <a href="#koa"><img src="https://img.shields.io/badge/Koa-33333D?logo=koa&logoColor=white" alt="Koa adapter" /></a>
+  <a href="#nestjs"><img src="https://img.shields.io/badge/NestJS-E0234E?logo=nestjs&logoColor=white" alt="NestJS adapter" /></a>
+  <a href="#hono"><img src="https://img.shields.io/badge/Hono-E36002?logo=hono&logoColor=white" alt="Hono adapter" /></a>
+  <a href="#fetch-api--serverless"><img src="https://img.shields.io/badge/Fetch%20API-F7DF1E?logo=javascript&logoColor=black" alt="Fetch API adapter" /></a>
+</p>
+
 ---
 
 ## Features
