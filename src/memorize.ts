@@ -3,6 +3,8 @@ import { Memorize } from './domain/Memorize';
 import { MemorizeOptions } from './domain/MemorizeOptions';
 import { MemorizeCallOptions } from './domain/MemorizeCallOptions';
 import { createExpressMiddleware } from './adapters/express';
+import { createSerializer } from './serializer';
+export type { Serializer, SerializerOption } from './serializer';
 
 export type { Memorize, MemorizeOptions, MemorizeCallOptions };
 
@@ -57,8 +59,9 @@ export type { Memorize, MemorizeOptions, MemorizeCallOptions };
  * ```
  */
 export function memorize(options: MemorizeOptions = {}): Memorize {
-  const { ttl, maxEntries } = options;
+  const { ttl, maxEntries, serializer: serializerOption } = options;
   const store = new MemorizeStore(maxEntries);
+  const serializer = createSerializer(serializerOption);
   const expressMiddleware = createExpressMiddleware(store, ttl);
 
   const cache = function (callOptions?: MemorizeCallOptions) {
@@ -68,14 +71,16 @@ export function memorize(options: MemorizeOptions = {}): Memorize {
   cache.express = (callOptions?: MemorizeCallOptions) => expressMiddleware(callOptions);
 
   cache.set = <T>(key: string, value: T, entryTtl?: number): void => {
-    store.set(key, { body: JSON.stringify(value), statusCode: 200, contentType: 'application/json' }, entryTtl ?? ttl);
+    const body = serializer.serialize(value);
+    const contentType = Buffer.isBuffer(body) ? 'application/octet-stream' : 'application/json';
+    store.set(key, { body, statusCode: 200, contentType }, entryTtl ?? ttl);
   };
 
   cache.getValue = <T>(key: string): T | undefined => {
     const info = store.get(key);
     if (!info) return undefined;
     try {
-      return JSON.parse(info.body as string) as T;
+      return serializer.deserialize(info.body as string | Buffer) as T;
     } catch {
       return undefined;
     }
