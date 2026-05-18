@@ -1,3 +1,10 @@
+# [2.3.0](https://github.com/ElJijuna/express-memorize/compare/v2.2.0...v2.3.0) (2026-05-18)
+
+
+### Features
+
+* add pluggable serializer option with node:v8 support and benchmark suite ([6b86a3e](https://github.com/ElJijuna/express-memorize/commit/6b86a3eebffc0f513261e6fd657904ad4daab911)), closes [#19](https://github.com/ElJijuna/express-memorize/issues/19)
+
 # [2.2.0](https://github.com/ElJijuna/express-memorize/compare/v2.1.0...v2.2.0) (2026-05-11)
 
 
