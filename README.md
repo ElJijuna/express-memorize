@@ -32,6 +32,7 @@
 - **`maxEntries` cap with LRU eviction** to bound memory usage
 - **Size metrics**: `size()`, `byteSize()`, `getStats()`
 - **Service-level cache**: `remember()`, `set()`, `getValue()`
+- **Pluggable serializer**: `'auto'` (node:v8 when available, else JSON), `'json'`, `'v8'`, or custom
 - Event hooks: `set`, `delete`, `expire`, `evict`
 - Cache inspection and invalidation API (`get`, `getAll`, `delete`, `deleteMatching`, `clear`)
 - Hit counter per cache entry
@@ -183,6 +184,49 @@ const users = await cache.remember('users:list', () => usersService.findAll());
 // Explicit set/get
 cache.set('config', appConfig);
 const config = cache.getValue<AppConfig>('config');
+```
+
+### Serializer
+
+The `serializer` option controls how values passed to `set()` / `getValue()` / `remember()` are stored internally. It does **not** affect HTTP middleware caching — adapters store response bodies as-is.
+
+| Value | Serializes to | Handles `Date`, `Map`, `Set`, `Buffer` | Runtime |
+|-------|--------------|----------------------------------------|---------|
+| `'auto'` *(default)* | Buffer (v8) or string (JSON) | Yes — when `node:v8` is available | Any |
+| `'json'` | string | No | Any (edge runtimes, human-readable) |
+| `'v8'` | Buffer | Yes | Node.js / Bun — throws at construction otherwise |
+| Custom object | user-defined | user-defined | Any |
+
+```typescript
+// auto (default): uses node:v8 when available, falls back to JSON silently
+const cache = memorize();
+
+// Always JSON — useful for edge runtimes or when you need human-readable bodies
+const cache = memorize({ serializer: 'json' });
+
+// Always v8 — throws at construction if node:v8 is not available
+const cache = memorize({ serializer: 'v8' });
+
+// Custom serializer — bring your own (MessagePack, CBOR, etc.)
+import { pack, unpack } from 'msgpackr';
+const cache = memorize({
+  serializer: {
+    serialize:   (v) => Buffer.from(pack(v)),
+    deserialize: (d) => unpack(d as Buffer),
+  },
+});
+```
+
+With `'v8'` or `'auto'`, `set()` correctly round-trips types that JSON cannot represent:
+
+```typescript
+const cache = memorize({ serializer: 'v8', ttl: Infinity });
+
+cache.set('created', new Date());
+cache.getValue<Date>('created');   // Date instance preserved
+
+cache.set('roles', new Set(['admin', 'editor']));
+cache.getValue<Set<string>>('roles');  // Set instance preserved
 ```
 
 ---
@@ -403,6 +447,7 @@ Creates a cache instance. Returns a `Memorize` object.
 |--------|------|---------|-------------|
 | `ttl` | `number` | `60_000` | Time-to-live in milliseconds. Pass `Infinity` for no expiry. |
 | `maxEntries` | `number` | `undefined` | Maximum number of entries. LRU eviction when reached. |
+| `serializer` | `'auto' \| 'json' \| 'v8' \| Serializer` | `'auto'` | Serializer for `set()` / `getValue()`. `'auto'` uses `node:v8` when available, falls back to JSON. Does not affect HTTP middleware caching. |
 
 ### `cache(options?)` / `cache.express(options?)`
 
