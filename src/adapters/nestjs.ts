@@ -237,7 +237,7 @@ export class MemorizeInterceptor {
     setCacheHeader(response, 'MISS');
     return cacheObservable(next.handle(), (value) => {
       if (value === undefined || response.headersSent) return;
-      this.cache.set(key, value, ttl);
+      this.cache._store.set(key, { body: value, statusCode: 200, contentType: 'application/json' }, ttl ?? this.cache._ttl);
     });
   }
 }

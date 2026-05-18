@@ -1,3 +1,5 @@
+import type { SerializerOption } from '../serializer';
+
 /**
  * Options passed to the {@link memorize} factory.
  *
@@ -26,4 +28,21 @@ export interface MemorizeOptions {
    * ```
    */
   maxEntries?: number;
+
+  /**
+   * Serializer used by {@link Memorize.set} and {@link Memorize.getValue}.
+   *
+   * - `'auto'` (default) — uses `node:v8` when available, falls back to JSON silently.
+   * - `'json'` — always uses `JSON.stringify` / `JSON.parse` (edge-runtime safe, human-readable).
+   * - `'v8'`  — always uses `node:v8`; throws at construction if not available.
+   * - Custom object — `{ serialize(v): string | Buffer; deserialize(d): unknown }`.
+   *
+   * HTTP middleware caching (Express, Hono, Fastify, etc.) is not affected by this option.
+   *
+   * @example
+   * ```ts
+   * const cache = memorize({ serializer: 'v8' });  // opt-in to faster v8 serialization
+   * ```
+   */
+  serializer?: SerializerOption;
 }
