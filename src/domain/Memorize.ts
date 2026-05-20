@@ -84,6 +84,17 @@ export interface Memorize {
   set<T>(key: string, value: T, ttl?: number): void;
 
   /**
+   * Async variant of {@link set}. It yields back to the event loop before
+   * serializing and storing the value, which helps when many direct-cache writes
+   * are processed with `await` in a loop.
+   *
+   * @param key - Cache key.
+   * @param value - Value to cache.
+   * @param ttl - Time-to-live in milliseconds. Defaults to the global TTL.
+   */
+  setAsync<T>(key: string, value: T, ttl?: number): Promise<void>;
+
+  /**
    * Returns the cached value for the given key, or `undefined` if the key does
    * not exist or has expired.
    *
@@ -100,6 +111,14 @@ export interface Memorize {
   getValue<T>(key: string): T | undefined;
 
   /**
+   * Async variant of {@link getValue}. It yields back to the event loop before
+   * deserializing the cached value.
+   *
+   * @param key - Cache key.
+   */
+  getValueAsync<T>(key: string): Promise<T | undefined>;
+
+  /**
    * Returns the cached value for the given key if it exists, otherwise calls
    * `factory`, caches the result, and returns it.
    *
@@ -114,6 +133,17 @@ export interface Memorize {
    * ```
    */
   remember<T>(key: string, factory: () => T | Promise<T>, ttl?: number): Promise<T>;
+
+  /**
+   * Async variant of {@link remember}. It uses {@link getValueAsync} and
+   * {@link setAsync} for cooperative yielding around direct-cache
+   * serialization/deserialization.
+   *
+   * @param key - Cache key.
+   * @param factory - Async or sync function that produces the value on a cache miss.
+   * @param ttl - Time-to-live in milliseconds. Defaults to the global TTL.
+   */
+  rememberAsync<T>(key: string, factory: () => T | Promise<T>, ttl?: number): Promise<T>;
 
   /**
    * Returns the {@link CacheInfo} for a specific cache key, or `null` if the key

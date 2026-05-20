@@ -479,6 +479,47 @@ describe('memorize middleware', () => {
 
       jest.useRealTimers();
     });
+
+    it('setAsync stores a value after yielding to the event loop', async () => {
+      jest.useRealTimers();
+      const cache = memorize();
+      let yielded = false;
+      setImmediate(() => { yielded = true; });
+
+      const promise = cache.setAsync('async-key', { ok: true });
+      expect(cache.getValue('async-key')).toBeUndefined();
+
+      await promise;
+
+      expect(yielded).toBe(true);
+      expect(cache.getValue('async-key')).toEqual({ ok: true });
+    });
+
+    it('getValueAsync retrieves a value after yielding to the event loop', async () => {
+      jest.useRealTimers();
+      const cache = memorize();
+      let yielded = false;
+      cache.set('async-key', { ok: true });
+      setImmediate(() => { yielded = true; });
+
+      const value = await cache.getValueAsync('async-key');
+
+      expect(yielded).toBe(true);
+      expect(value).toEqual({ ok: true });
+    });
+
+    it('setAsync respects TTL', async () => {
+      jest.useFakeTimers();
+      const cache = memorize();
+      const promise = cache.setAsync('temp', 'value', 500);
+      jest.advanceTimersByTime(0);
+      await promise;
+
+      jest.advanceTimersByTime(501);
+
+      expect(cache.getValue('temp')).toBeUndefined();
+      jest.useRealTimers();
+    });
   });
 
   describe('cache.remember', () => {
@@ -528,6 +569,26 @@ describe('memorize middleware', () => {
       expect(factory2).toHaveBeenCalledTimes(1);
 
       jest.useRealTimers();
+    });
+
+    it('rememberAsync calls factory and returns value on cache miss', async () => {
+      const cache = memorize();
+      const factory = jest.fn().mockResolvedValue({ data: [1, 2, 3] });
+
+      const result = await cache.rememberAsync('list', factory);
+
+      expect(factory).toHaveBeenCalledTimes(1);
+      expect(result).toEqual({ data: [1, 2, 3] });
+    });
+
+    it('rememberAsync does not call factory on cache hit', async () => {
+      const cache = memorize();
+      const factory = jest.fn().mockResolvedValue({ data: [] });
+
+      await cache.rememberAsync('list', factory);
+      await cache.rememberAsync('list', factory);
+
+      expect(factory).toHaveBeenCalledTimes(1);
     });
   });
 

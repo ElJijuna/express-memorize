@@ -483,8 +483,11 @@ Returns an Express `RequestHandler`. `cache()` is a backwards-compatible alias f
 | Method | Signature | Description |
 |--------|-----------|-------------|
 | `remember` | `(key, factory, ttl?) => Promise<T>` | Return cached value or call factory and cache the result. |
+| `rememberAsync` | `(key, factory, ttl?) => Promise<T>` | Async variant using cooperative yielding around direct-cache serialization. |
 | `set` | `(key, value, ttl?) => void` | Store an arbitrary value. |
+| `setAsync` | `(key, value, ttl?) => Promise<void>` | Async variant that yields before serializing and storing. |
 | `getValue` | `(key) => T \| undefined` | Retrieve a value stored via `set` or `remember`. |
+| `getValueAsync` | `(key) => Promise<T \| undefined>` | Async variant that yields before deserializing. |
 
 ### Cache management
 
