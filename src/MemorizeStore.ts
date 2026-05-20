@@ -362,21 +362,38 @@ export class MemorizeStore {
    */
   async clearAsync(options?: MemorizeBatchOptions): Promise<number> {
     const batchSize = normalizeBatchSize(options);
-    const keys = [...this._store.keys()];
     let count = 0;
 
-    for (let i = 0; i < keys.length; i++) {
-      if (this._store.has(keys[i])) {
-        this._evict(keys[i], MemorizeEventType.Delete);
-        count++;
+    while (this._store.size > 0) {
+      const keys = this._takeKeys(batchSize);
+      if (keys.length === 0) break;
+
+      for (const key of keys) {
+        if (this._store.has(key)) {
+          this._evict(key, MemorizeEventType.Delete);
+          count++;
+        }
       }
 
-      if ((i + 1) % batchSize === 0 && i + 1 < keys.length) {
+      if (this._store.size > 0) {
         await yieldToEventLoop();
       }
     }
 
     return count;
+  }
+
+  private _takeKeys(limit: number): string[] {
+    const keys: string[] = [];
+
+    for (const key of this._store.keys()) {
+      keys.push(key);
+      if (keys.length >= limit) {
+        break;
+      }
+    }
+
+    return keys;
   }
 
   /**
