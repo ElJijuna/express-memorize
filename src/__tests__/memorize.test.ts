@@ -206,6 +206,18 @@ describe('memorize middleware', () => {
       expect(Object.keys(cache.getAll())).toHaveLength(3);
     });
 
+    it('cache.getAllAsync returns all active entries', async () => {
+      const cache = memorize();
+      cache.set('/a', 'a');
+      cache.set('/b', 'b');
+
+      const all = await cache.getAllAsync({ batchSize: 1 });
+
+      expect(Object.keys(all)).toHaveLength(2);
+      expect(cache.getValue('/a')).toBe('a');
+      expect(cache.getValue('/b')).toBe('b');
+    });
+
     it('cache.clear removes all entries', () => {
       const cache = memorize();
       const middleware = cache();
@@ -216,6 +228,29 @@ describe('memorize middleware', () => {
 
       cache.clear();
       expect(cache.getAll()).toEqual({});
+    });
+
+    it('cache.clearAsync removes all entries and returns the count', async () => {
+      const cache = memorize();
+      cache.set('/a', 'a');
+      cache.set('/b', 'b');
+
+      await expect(cache.clearAsync({ batchSize: 1 })).resolves.toBe(2);
+
+      expect(cache.getAll()).toEqual({});
+    });
+
+    it('cache.deleteMatchingAsync removes matching entries and returns the count', async () => {
+      const cache = memorize();
+      cache.set('/api/users/1', 'a');
+      cache.set('/api/users/2', 'b');
+      cache.set('/api/products/1', 'c');
+
+      await expect(cache.deleteMatchingAsync('/api/users/*', { batchSize: 1 })).resolves.toBe(2);
+
+      expect(cache.getValue('/api/users/1')).toBeUndefined();
+      expect(cache.getValue('/api/users/2')).toBeUndefined();
+      expect(cache.getValue('/api/products/1')).toBe('c');
     });
   });
 
@@ -523,11 +558,13 @@ describe('memorize middleware', () => {
     });
 
     it('getStats() returns correct shape', () => {
-      const cache = memorize({ maxEntries: 10 });
+      const cache = memorize({ maxEntries: 10, maxValueBytes: 100, maxTotalBytes: 1_000 });
       cache.set('key', 'value');
       const stats = cache.getStats();
       expect(stats.entries).toBe(1);
       expect(stats.maxEntries).toBe(10);
+      expect(stats.maxValueBytes).toBe(100);
+      expect(stats.maxTotalBytes).toBe(1_000);
       expect(stats.byteSize).toBeGreaterThan(0);
     });
 
@@ -567,6 +604,39 @@ describe('memorize middleware', () => {
       cache.set('/a', 'a');
       cache.set('/b', 'b');
       expect(evicted).toEqual(['/a']);
+    });
+  });
+
+  describe('byte limits', () => {
+    it('does not store direct-cache values larger than maxValueBytes by default', () => {
+      const cache = memorize({ maxValueBytes: Buffer.byteLength(JSON.stringify('abc')) - 1 });
+
+      cache.set('/a', 'abc');
+
+      expect(cache.getValue('/a')).toBeUndefined();
+      expect(cache.size()).toBe(0);
+    });
+
+    it('throws for direct-cache values larger than maxValueBytes when configured', () => {
+      const cache = memorize({
+        maxValueBytes: Buffer.byteLength(JSON.stringify('abc')) - 1,
+        sizeLimitAction: 'throw',
+      });
+
+      expect(() => cache.set('/a', 'abc')).toThrow(RangeError);
+    });
+
+    it('evicts LRU entries when maxTotalBytes is reached', () => {
+      const cache = memorize({ maxTotalBytes: 8, serializer: 'json' });
+      cache.set('/a', 'a');
+      cache.set('/b', 'b');
+      cache.getValue('/a');
+
+      cache.set('/c', 'cc');
+
+      expect(cache.getValue('/a')).toBe('a');
+      expect(cache.getValue('/b')).toBeUndefined();
+      expect(cache.getValue('/c')).toBe('cc');
     });
   });
 });

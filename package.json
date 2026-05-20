@@ -54,6 +54,7 @@
     "test:watch": "jest --watch",
     "prepublishOnly": "npm test && npm run build",
     "bench": "tsx bench/index.ts",
+    "bench:eventloop": "tsx bench/eventloop-only.ts",
     "docs": "typedoc",
     "docs:watch": "typedoc --watch"
   },

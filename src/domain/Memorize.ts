@@ -8,6 +8,7 @@ import { MemorizeExpireEvent } from './MemorizeExpireEvent';
 import { MemorizeEmptyEvent } from './MemorizeEmptyEvent';
 import { MemorizeEvictEvent } from './MemorizeEvictEvent';
 import { MemorizeStats } from './MemorizeStats';
+import { MemorizeBatchOptions } from './MemorizeBatchOptions';
 import { MemorizeStore } from '../MemorizeStore';
 
 /**
@@ -139,6 +140,21 @@ export interface Memorize {
   getAll(): Record<string, CacheInfo>;
 
   /**
+   * Async variant of {@link getAll}. It scans entries in batches and yields
+   * back to the event loop between batches, which reduces long synchronous
+   * pauses on large stores.
+   *
+   * @param options - Batch options.
+   * @returns All active cache entries keyed by cache key.
+   *
+   * @example
+   * ```ts
+   * const entries = await cache.getAllAsync({ batchSize: 500 });
+   * ```
+   */
+  getAllAsync(options?: MemorizeBatchOptions): Promise<Record<string, CacheInfo>>;
+
+  /**
    * Removes a single entry from the cache and emits a {@link MemorizeEventType.Delete} event.
    *
    * @param key - The full request URL to invalidate.
@@ -182,6 +198,22 @@ export interface Memorize {
   deleteMatching(pattern: string): number;
 
   /**
+   * Async variant of {@link deleteMatching}. It removes matching entries in
+   * batches and yields back to the event loop between batches, which reduces
+   * long synchronous pauses on large stores.
+   *
+   * @param pattern - Glob pattern to match against cache keys.
+   * @param options - Batch options.
+   * @returns The number of entries removed.
+   *
+   * @example
+   * ```ts
+   * await cache.deleteMatchingAsync('/api/users/*', { batchSize: 500 });
+   * ```
+   */
+  deleteMatchingAsync(pattern: string, options?: MemorizeBatchOptions): Promise<number>;
+
+  /**
    * Removes **all** entries from the cache and emits a {@link MemorizeEventType.Delete}
    * event for each.
    *
@@ -191,6 +223,21 @@ export interface Memorize {
    * ```
    */
   clear(): void;
+
+  /**
+   * Async variant of {@link clear}. It removes entries in batches and yields
+   * back to the event loop between batches, which reduces long synchronous
+   * pauses on large stores.
+   *
+   * @param options - Batch options.
+   * @returns The number of entries removed.
+   *
+   * @example
+   * ```ts
+   * await cache.clearAsync({ batchSize: 500 });
+   * ```
+   */
+  clearAsync(options?: MemorizeBatchOptions): Promise<number>;
 
   /**
    * Registers a listener for cache events.

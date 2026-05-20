@@ -373,6 +373,14 @@ app.put('/users/:id', (req, res) => {
 });
 ```
 
+For large caches, use the async variants to process removals in batches and
+yield back to the event loop between batches:
+
+```typescript
+await cache.deleteMatchingAsync(`**/users/${req.params.id}*`, { batchSize: 500 });
+await cache.clearAsync({ batchSize: 500 });
+```
+
 **Glob rules:**
 
 | Pattern | Behaviour |
@@ -381,12 +389,20 @@ app.put('/users/:id', (req, res) => {
 | `**` | Matches any sequence across path segments (crosses `/`) |
 | `?` | Matches any single character except `/` |
 
-### Bounding memory with `maxEntries`
+### Bounding memory
 
-Prevent unbounded growth by setting a maximum number of entries. When the limit is reached, the **least-recently-used (LRU)** entry is evicted before the new one is stored.
+Prevent unbounded growth by setting a maximum number of entries or bytes. When
+`maxEntries` or `maxTotalBytes` is reached, the **least-recently-used (LRU)**
+entry is evicted before the new one is stored. Entries larger than
+`maxValueBytes` are skipped by default.
 
 ```typescript
-const cache = memorize({ ttl: 30_000, maxEntries: 1_000 });
+const cache = memorize({
+  ttl: 30_000,
+  maxEntries: 1_000,
+  maxValueBytes: 256_000,
+  maxTotalBytes: 50_000_000,
+});
 ```
 
 ### Size metrics
@@ -394,7 +410,7 @@ const cache = memorize({ ttl: 30_000, maxEntries: 1_000 });
 ```typescript
 cache.size();      // number of active entries
 cache.byteSize();  // approximate total body size in bytes
-cache.getStats();  // { entries, maxEntries, byteSize }
+cache.getStats();  // { entries, maxEntries, maxValueBytes, maxTotalBytes, byteSize }
 ```
 
 > `byteSize()` is an estimate based on UTF-8 encoding for strings and `byteLength` for buffers. It may not reflect actual VM memory usage.
@@ -404,6 +420,7 @@ cache.getStats();  // { entries, maxEntries, byteSize }
 ```typescript
 cache.get('/users');   // CacheInfo | null
 cache.getAll();        // Record<string, CacheInfo>
+cache.getAllAsync();   // Promise<Record<string, CacheInfo>>
 ```
 
 `CacheInfo` shape:
@@ -447,6 +464,9 @@ Creates a cache instance. Returns a `Memorize` object.
 |--------|------|---------|-------------|
 | `ttl` | `number` | `60_000` | Time-to-live in milliseconds. Pass `Infinity` for no expiry. |
 | `maxEntries` | `number` | `undefined` | Maximum number of entries. LRU eviction when reached. |
+| `maxValueBytes` | `number` | `undefined` | Maximum serialized byte size for one entry. Oversized entries are skipped by default. |
+| `maxTotalBytes` | `number` | `undefined` | Maximum approximate byte size for the whole cache. LRU eviction when reached. |
+| `sizeLimitAction` | `'skip' \| 'throw'` | `'skip'` | Behavior when one entry exceeds a byte limit. |
 | `serializer` | `'auto' \| 'json' \| 'v8' \| Serializer` | `'auto'` | Serializer for `set()` / `getValue()`. `'auto'` uses `node:v8` when available, falls back to JSON. Does not affect HTTP middleware caching. |
 
 ### `cache(options?)` / `cache.express(options?)`
@@ -472,12 +492,15 @@ Returns an Express `RequestHandler`. `cache()` is a backwards-compatible alias f
 |--------|-----------|-------------|
 | `get` | `(key) => CacheInfo \| null` | Returns info for a cached key. |
 | `getAll` | `() => Record<string, CacheInfo>` | Returns all active entries. |
+| `getAllAsync` | `({ batchSize }?) => Promise<Record<string, CacheInfo>>` | Async batched variant of `getAll`. |
 | `delete` | `(key) => boolean` | Removes a single entry. |
 | `deleteMatching` | `(pattern) => number` | Removes entries matching a glob pattern. |
+| `deleteMatchingAsync` | `(pattern, { batchSize }?) => Promise<number>` | Async batched variant of `deleteMatching`. |
 | `clear` | `() => void` | Removes all entries. |
+| `clearAsync` | `({ batchSize }?) => Promise<number>` | Async batched variant of `clear`. |
 | `size` | `() => number` | Number of active entries. |
 | `byteSize` | `() => number` | Approximate total body size in bytes. |
-| `getStats` | `() => MemorizeStats` | Aggregate stats: `{ entries, maxEntries, byteSize }`. |
+| `getStats` | `() => MemorizeStats` | Aggregate stats: `{ entries, maxEntries, maxValueBytes, maxTotalBytes, byteSize }`. |
 
 ### Adapters
 
@@ -498,7 +521,7 @@ Returns an Express `RequestHandler`. `cache()` is a backwards-compatible alias f
 | `set` | `{ type, key, body, statusCode, contentType, expiresAt, size }` | A response is stored |
 | `delete` | `{ type, key }` | Manual removal via `delete`, `deleteMatching`, or `clear` |
 | `expire` | `{ type, key }` | TTL timer fires or lazy expiry is detected |
-| `evict` | `{ type, key }` | LRU eviction due to `maxEntries` limit |
+| `evict` | `{ type, key }` | LRU eviction due to `maxEntries` or `maxTotalBytes` limit |
 | `empty` | `{ type }` | Last entry removed, cache is now empty |
 
 ## Response Headers
