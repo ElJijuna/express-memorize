@@ -561,6 +561,30 @@ describe('memorize middleware', () => {
       await expect(cache.getValueAsync('worker-key')).resolves.toEqual({ ok: true, items: [1, 2, 3] });
     });
 
+    it('clamps an oversized asyncSerializerWorkers request and still works', async () => {
+      const cache = memorize({
+        serializer: 'json',
+        asyncSerializer: 'worker',
+        asyncSerializerWorkers: 1000,
+      });
+
+      await Promise.all([
+        cache.setAsync('worker-key-a', { ok: 'a' }),
+        cache.setAsync('worker-key-b', { ok: 'b' }),
+      ]);
+
+      await expect(cache.getValueAsync('worker-key-a')).resolves.toEqual({ ok: 'a' });
+      await expect(cache.getValueAsync('worker-key-b')).resolves.toEqual({ ok: 'b' });
+    });
+
+    it('rejects invalid asyncSerializerWorkers values', () => {
+      expect(() => memorize({
+        serializer: 'json',
+        asyncSerializer: 'worker',
+        asyncSerializerWorkers: 0,
+      })).toThrow(RangeError);
+    });
+
     it('setAsync/getValueAsync can offload v8 serialization to a worker', async () => {
       const cache = memorize({ serializer: 'v8', asyncSerializer: 'worker' });
       const value = { createdAt: new Date('2026-01-01T00:00:00.000Z'), tags: new Set(['a', 'b']) };

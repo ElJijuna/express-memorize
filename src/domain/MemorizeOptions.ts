@@ -70,6 +70,17 @@ export interface MemorizeOptions {
   asyncSerializer?: 'yield' | 'worker';
 
   /**
+   * Maximum number of lazy worker threads used by `asyncSerializer: 'worker'`.
+   *
+   * - `'auto'` — choose a conservative count from available CPU parallelism.
+   * - `number` — requested worker count, clamped to available parallelism and
+   *   an internal safety cap.
+   *
+   * @defaultValue 'auto'
+   */
+  asyncSerializerWorkers?: 'auto' | number;
+
+  /**
    * Serializer used by {@link Memorize.set} and {@link Memorize.getValue}.
    *
    * - `'auto'` (default) — uses `node:v8` when available, falls back to JSON silently.

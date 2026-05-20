@@ -81,12 +81,13 @@ export function memorize(options: MemorizeOptions = {}): Memorize {
     maxTotalBytes,
     sizeLimitAction,
     asyncSerializer: asyncSerializerMode = 'yield',
+    asyncSerializerWorkers,
     serializer: serializerOption,
   } = options;
   const store = new MemorizeStore({ maxEntries, maxValueBytes, maxTotalBytes, sizeLimitAction });
   const serializer = createSerializer(serializerOption);
   const workerSerializer = asyncSerializerMode === 'worker'
-    ? createWorkerAsyncSerializer(serializerOption)
+    ? createWorkerAsyncSerializer(serializerOption, asyncSerializerWorkers)
     : null;
   const expressMiddleware = createExpressMiddleware(store, ttl);
   const keyVersions = new Map<string, number>();
