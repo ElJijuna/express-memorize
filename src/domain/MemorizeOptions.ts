@@ -30,6 +30,32 @@ export interface MemorizeOptions {
   maxEntries?: number;
 
   /**
+   * Maximum serialized byte size allowed for a single entry.
+   *
+   * Entries larger than this limit are skipped by default. Set
+   * {@link MemorizeOptions.sizeLimitAction} to `'throw'` to fail instead.
+   */
+  maxValueBytes?: number;
+
+  /**
+   * Maximum approximate byte size allowed for the whole cache.
+   *
+   * When the limit is reached, least-recently-used entries are evicted until
+   * the new entry fits. Entries larger than this limit are skipped by default.
+   */
+  maxTotalBytes?: number;
+
+  /**
+   * Behavior when a single entry exceeds `maxValueBytes` or `maxTotalBytes`.
+   *
+   * - `'skip'` — do not store the oversized entry.
+   * - `'throw'` — throw a `RangeError`.
+   *
+   * @defaultValue 'skip'
+   */
+  sizeLimitAction?: 'skip' | 'throw';
+
+  /**
    * Serializer used by {@link Memorize.set} and {@link Memorize.getValue}.
    *
    * - `'auto'` (default) — uses `node:v8` when available, falls back to JSON silently.

@@ -91,6 +91,38 @@ describe('MemorizeStore', () => {
     it('returns an empty object when the store is empty', () => {
       expect(store.getAll()).toEqual({});
     });
+
+    it('getAllAsync returns all stored entries', async () => {
+      store.set('/a', entry(1));
+      store.set('/b', entry(2));
+
+      const all = await store.getAllAsync({ batchSize: 1 });
+
+      expect(Object.keys(all)).toHaveLength(2);
+      expect(all['/a'].body).toBe(1);
+      expect(all['/b'].body).toBe(2);
+    });
+
+    it('getAllAsync yields between batches', async () => {
+      jest.useRealTimers();
+      const s = new MemorizeStore();
+      let yielded = false;
+
+      for (let i = 0; i < 5; i++) s.set(`/key/${i}`, entry(i));
+      setImmediate(() => { yielded = true; });
+
+      const resultPromise = s.getAllAsync({ batchSize: 2 });
+      expect(yielded).toBe(false);
+
+      const result = await resultPromise;
+
+      expect(Object.keys(result)).toHaveLength(5);
+      expect(yielded).toBe(true);
+    });
+
+    it('getAllAsync rejects invalid batch sizes', async () => {
+      await expect(store.getAllAsync({ batchSize: 0 })).rejects.toThrow(RangeError);
+    });
   });
 
   describe('empty event', () => {
@@ -160,6 +192,36 @@ describe('MemorizeStore', () => {
 
       expect(store.getAll()).toEqual({});
     });
+
+    it('clearAsync removes all entries and returns the count', async () => {
+      store.set('/a', entry());
+      store.set('/b', entry());
+
+      await expect(store.clearAsync({ batchSize: 1 })).resolves.toBe(2);
+
+      expect(store.getAll()).toEqual({});
+    });
+
+    it('clearAsync yields between batches', async () => {
+      jest.useRealTimers();
+      const s = new MemorizeStore();
+      const yieldedByDelete: boolean[] = [];
+      let yielded = false;
+
+      s.on(MemorizeEventType.Delete, () => yieldedByDelete.push(yielded));
+      for (let i = 0; i < 5; i++) s.set(`/key/${i}`, entry());
+      setImmediate(() => { yielded = true; });
+
+      await s.clearAsync({ batchSize: 2 });
+
+      expect(yieldedByDelete).toEqual([false, false, true, true, true]);
+    });
+
+    it('clearAsync rejects invalid batch sizes', async () => {
+      store.set('/a', entry());
+
+      await expect(store.clearAsync({ batchSize: 0 })).rejects.toThrow(RangeError);
+    });
   });
 
   describe('deleteMatching', () => {
@@ -228,6 +290,54 @@ describe('MemorizeStore', () => {
       expect(count).toBe(2);
       expect(store.get('/api/users/xyz')).not.toBeNull();
     });
+
+    it('deleteMatchingAsync removes matching entries and returns the count', async () => {
+      store.set('/api/users/1', entry());
+      store.set('/api/users/2', entry());
+      store.set('/api/products/1', entry());
+
+      await expect(store.deleteMatchingAsync('/api/users/*', { batchSize: 1 })).resolves.toBe(2);
+
+      expect(store.get('/api/users/1')).toBeNull();
+      expect(store.get('/api/users/2')).toBeNull();
+      expect(store.get('/api/products/1')).not.toBeNull();
+    });
+
+    it('deleteMatchingAsync yields between batches', async () => {
+      jest.useRealTimers();
+      const s = new MemorizeStore();
+      const yieldedByDelete: boolean[] = [];
+      let yielded = false;
+
+      s.on(MemorizeEventType.Delete, () => yieldedByDelete.push(yielded));
+      for (let i = 0; i < 5; i++) s.set(`/api/users/${i}`, entry());
+      setImmediate(() => { yielded = true; });
+
+      await s.deleteMatchingAsync('/api/users/*', { batchSize: 2 });
+
+      expect(yieldedByDelete).toEqual([false, false, true, true, true]);
+    });
+
+    it('deleteMatchingAsync yields while scanning non-matching keys', async () => {
+      jest.useRealTimers();
+      const s = new MemorizeStore();
+      const yieldedByDelete: boolean[] = [];
+      let yielded = false;
+
+      s.on(MemorizeEventType.Delete, () => yieldedByDelete.push(yielded));
+      s.set('/api/products/1', entry());
+      s.set('/api/products/2', entry());
+      s.set('/api/users/1', entry());
+      setImmediate(() => { yielded = true; });
+
+      await s.deleteMatchingAsync('/api/users/*', { batchSize: 2 });
+
+      expect(yieldedByDelete).toEqual([true]);
+    });
+
+    it('deleteMatchingAsync rejects invalid batch sizes', async () => {
+      await expect(store.deleteMatchingAsync('/api/users/*', { batchSize: -1 })).rejects.toThrow(RangeError);
+    });
   });
 
   describe('TTL', () => {
@@ -292,6 +402,29 @@ describe('MemorizeStore', () => {
       expect(info).not.toBeNull();
       expect(info!.remainingTtl).toBeNull();
       expect(info!.expiresAt).toBeNull();
+    });
+
+    it('unrefs TTL timers so they do not keep the process alive', () => {
+      jest.useRealTimers();
+      const unref = jest.fn();
+      const setTimeoutSpy = jest
+        .spyOn(global, 'setTimeout')
+        .mockReturnValue({ unref } as unknown as ReturnType<typeof setTimeout>);
+
+      try {
+        store.set('/users', entry(), 1000);
+        expect(unref).toHaveBeenCalledTimes(1);
+      } finally {
+        setTimeoutSpy.mockRestore();
+        jest.useFakeTimers();
+      }
+    });
+
+    it('does not create a TTL timer for Infinity', () => {
+      const setTimeoutSpy = jest.spyOn(global, 'setTimeout');
+      store.set('/users', entry(), Infinity);
+      expect(setTimeoutSpy).not.toHaveBeenCalled();
+      setTimeoutSpy.mockRestore();
     });
 
     it('ttl 0 expires immediately instead of creating an infinite entry', () => {
@@ -369,10 +502,84 @@ describe('MemorizeStore', () => {
       expect(s.getStats().maxEntries).toBe(5);
     });
 
+    it('getStats() reflects byte limits when configured', () => {
+      const s = new MemorizeStore({ maxValueBytes: 10, maxTotalBytes: 20 });
+      const stats = s.getStats();
+      expect(stats.maxValueBytes).toBe(10);
+      expect(stats.maxTotalBytes).toBe(20);
+    });
+
     it('CacheInfo includes size field', () => {
       store.set('/a', entry('hello'));
       const info = store.get('/a');
       expect(info!.size).toBe(Buffer.byteLength('hello'));
+    });
+
+    it('uses a precomputed entry size when provided', () => {
+      store.set('/a', { ...entry('hello'), size: 123 });
+
+      expect(store.byteSize()).toBe(123);
+      expect(store.get('/a')!.size).toBe(123);
+    });
+  });
+
+  describe('byte limits', () => {
+    it('skips entries larger than maxValueBytes by default', () => {
+      const s = new MemorizeStore({ maxValueBytes: 3 });
+
+      s.set('/a', entry('abcd'));
+
+      expect(s.get('/a')).toBeNull();
+      expect(s.byteSize()).toBe(0);
+    });
+
+    it('throws for entries larger than maxValueBytes when configured', () => {
+      const s = new MemorizeStore({ maxValueBytes: 3, sizeLimitAction: 'throw' });
+
+      expect(() => s.set('/a', entry('abcd'))).toThrow(RangeError);
+      expect(s.get('/a')).toBeNull();
+    });
+
+    it('keeps an existing entry when an oversized replacement is skipped', () => {
+      const s = new MemorizeStore({ maxValueBytes: 5 });
+      s.set('/a', entry('ok'));
+
+      s.set('/a', entry('too-large'));
+
+      expect(s.get('/a')!.body).toBe('ok');
+    });
+
+    it('evicts LRU entries until a new entry fits maxTotalBytes', () => {
+      const s = new MemorizeStore({ maxTotalBytes: 6 });
+      s.set('/a', entry('aa'));
+      s.set('/b', entry('bb'));
+      s.getRaw('/a');
+
+      s.set('/c', entry('ccc'));
+
+      expect(s.get('/a')).not.toBeNull();
+      expect(s.get('/b')).toBeNull();
+      expect(s.get('/c')).not.toBeNull();
+      expect(s.byteSize()).toBe(5);
+    });
+
+    it('skips entries larger than maxTotalBytes by default', () => {
+      const s = new MemorizeStore({ maxTotalBytes: 3 });
+
+      s.set('/a', entry('abcd'));
+
+      expect(s.get('/a')).toBeNull();
+      expect(s.byteSize()).toBe(0);
+    });
+
+    it('emits Evict when maxTotalBytes removes an entry', () => {
+      const s = new MemorizeStore({ maxTotalBytes: 4 });
+      const evicted: string[] = [];
+      s.on(MemorizeEventType.Evict, (e) => evicted.push(e.key));
+      s.set('/a', entry('aa'));
+      s.set('/b', entry('bbb'));
+
+      expect(evicted).toEqual(['/a']);
     });
   });
 

@@ -8,6 +8,10 @@ export type { Serializer, SerializerOption } from './serializer';
 
 export type { Memorize, MemorizeOptions, MemorizeCallOptions };
 
+function serializedByteSize(body: string | Buffer): number {
+  return Buffer.isBuffer(body) ? body.byteLength : Buffer.byteLength(body);
+}
+
 /**
  * Creates an in-memory cache instance.
  *
@@ -59,8 +63,15 @@ export type { Memorize, MemorizeOptions, MemorizeCallOptions };
  * ```
  */
 export function memorize(options: MemorizeOptions = {}): Memorize {
-  const { ttl, maxEntries, serializer: serializerOption } = options;
-  const store = new MemorizeStore(maxEntries);
+  const {
+    ttl,
+    maxEntries,
+    maxValueBytes,
+    maxTotalBytes,
+    sizeLimitAction,
+    serializer: serializerOption,
+  } = options;
+  const store = new MemorizeStore({ maxEntries, maxValueBytes, maxTotalBytes, sizeLimitAction });
   const serializer = createSerializer(serializerOption);
   const expressMiddleware = createExpressMiddleware(store, ttl);
 
@@ -73,7 +84,7 @@ export function memorize(options: MemorizeOptions = {}): Memorize {
   cache.set = <T>(key: string, value: T, entryTtl?: number): void => {
     const body = serializer.serialize(value);
     const contentType = Buffer.isBuffer(body) ? 'application/octet-stream' : 'application/json';
-    store.set(key, { body, statusCode: 200, contentType }, entryTtl ?? ttl);
+    store.set(key, { body, statusCode: 200, contentType, size: serializedByteSize(body) }, entryTtl ?? ttl);
   };
 
   cache.getValue = <T>(key: string): T | undefined => {
@@ -96,9 +107,12 @@ export function memorize(options: MemorizeOptions = {}): Memorize {
 
   cache.get            = (key: string) => store.get(key);
   cache.getAll         = () => store.getAll();
+  cache.getAllAsync    = (batchOptions) => store.getAllAsync(batchOptions);
   cache.delete         = (key: string) => store.delete(key);
   cache.deleteMatching = (pattern: string) => store.deleteMatching(pattern);
+  cache.deleteMatchingAsync = (pattern, batchOptions) => store.deleteMatchingAsync(pattern, batchOptions);
   cache.clear          = () => store.clear();
+  cache.clearAsync     = (batchOptions) => store.clearAsync(batchOptions);
   cache.on             = store.on.bind(store) as Memorize['on'];
   cache.size           = () => store.size();
   cache.byteSize       = () => store.byteSize();

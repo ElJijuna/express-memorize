@@ -10,4 +10,5 @@ export type { MemorizeEvictEvent } from './MemorizeEvictEvent';
 export type { MemorizeStats } from './MemorizeStats';
 export type { MemorizeOptions } from './MemorizeOptions';
 export type { MemorizeCallOptions } from './MemorizeCallOptions';
+export type { MemorizeBatchOptions } from './MemorizeBatchOptions';
 export type { Memorize } from './Memorize';

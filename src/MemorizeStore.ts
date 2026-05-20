@@ -9,6 +9,7 @@ import { MemorizeDeleteEvent } from './domain/MemorizeDeleteEvent';
 import { MemorizeExpireEvent } from './domain/MemorizeExpireEvent';
 import { MemorizeEmptyEvent } from './domain/MemorizeEmptyEvent';
 import { MemorizeEvictEvent } from './domain/MemorizeEvictEvent';
+import { MemorizeBatchOptions } from './domain/MemorizeBatchOptions';
 
 export type {
   CacheEntry,
@@ -31,7 +32,19 @@ type ListenerMap = {
   [MemorizeEventType.Evict]:  Array<(e: MemorizeEvictEvent) => void>;
 };
 
+interface MemorizeStoreOptions {
+  maxEntries?: number;
+  maxValueBytes?: number;
+  maxTotalBytes?: number;
+  sizeLimitAction?: 'skip' | 'throw';
+}
+
+type StoreEntryInput = Omit<CacheEntry, 'expiresAt' | 'hits' | 'size'> & {
+  size?: number;
+};
+
 const DEFAULT_TTL = 60_000;
+const DEFAULT_BATCH_SIZE = 1_000;
 
 function estimateByteSize(value: unknown): number {
   if (typeof value === 'string') return Buffer.byteLength(value);
@@ -63,6 +76,30 @@ function normalizeTtl(ttl?: number | null): { expiresAt: number | null; timerTtl
   return { expiresAt: Date.now() + effectiveTtl, timerTtl: effectiveTtl };
 }
 
+function normalizeBatchSize(options?: MemorizeBatchOptions): number {
+  const batchSize = options?.batchSize ?? DEFAULT_BATCH_SIZE;
+
+  if (!Number.isInteger(batchSize) || batchSize <= 0) {
+    throw new RangeError('batchSize must be a positive integer');
+  }
+
+  return batchSize;
+}
+
+function normalizeByteLimit(name: string, value: number | undefined): number | undefined {
+  if (value === undefined) return undefined;
+
+  if (!Number.isFinite(value) || value < 0) {
+    throw new RangeError(`${name} must be greater than or equal to 0`);
+  }
+
+  return value;
+}
+
+function yieldToEventLoop(): Promise<void> {
+  return new Promise((resolve) => setImmediate(resolve));
+}
+
 /**
  * Low-level in-memory key-value store with optional TTL, LRU eviction, and event emission.
  *
@@ -81,7 +118,21 @@ export class MemorizeStore {
     [MemorizeEventType.Evict]:  [],
   };
 
-  constructor(private readonly _maxEntries?: number) {}
+  private readonly _maxEntries?: number;
+  private readonly _maxValueBytes?: number;
+  private readonly _maxTotalBytes?: number;
+  private readonly _sizeLimitAction: 'skip' | 'throw';
+
+  constructor(maxEntriesOrOptions?: number | MemorizeStoreOptions) {
+    const options = typeof maxEntriesOrOptions === 'number'
+      ? { maxEntries: maxEntriesOrOptions }
+      : maxEntriesOrOptions ?? {};
+
+    this._maxEntries = options.maxEntries;
+    this._maxValueBytes = normalizeByteLimit('maxValueBytes', options.maxValueBytes);
+    this._maxTotalBytes = normalizeByteLimit('maxTotalBytes', options.maxTotalBytes);
+    this._sizeLimitAction = options.sizeLimitAction ?? 'skip';
+  }
 
   /**
    * Registers an event listener.
@@ -117,23 +168,30 @@ export class MemorizeStore {
    * @param ttl - Time-to-live in milliseconds. Omit or pass `null` to use the default TTL.
    * Pass `Infinity` for no expiry.
    */
-  set(key: string, entry: Omit<CacheEntry, 'expiresAt' | 'hits' | 'size'>, ttl?: number | null): void {
-    if (this._maxEntries && !this._store.has(key) && this._store.size >= this._maxEntries) {
+  set(key: string, entry: StoreEntryInput, ttl?: number | null): void {
+    const size = entry.size ?? estimateByteSize(entry.body);
+    const existing = this._store.get(key);
+
+    if (!this._canStoreSize(size, this._maxValueBytes, 'maxValueBytes')) return;
+    if (!this._canStoreSize(size, this._maxTotalBytes, 'maxTotalBytes')) return;
+
+    if (existing) {
+      this._removeStoredEntry(key);
+    }
+
+    if (this._maxEntries && this._store.size >= this._maxEntries) {
       this._evictLRU();
     }
 
-    if (this._timers.has(key)) {
-      clearTimeout(this._timers.get(key)!);
-      this._timers.delete(key);
-    }
-
-    const existing = this._store.get(key);
-    if (existing) {
-      this._totalByteSize -= existing.size;
+    while (
+      this._maxTotalBytes !== undefined &&
+      this._totalByteSize + size > this._maxTotalBytes &&
+      this._store.size > 0
+    ) {
+      this._evictLRU();
     }
 
     const { expiresAt, timerTtl } = normalizeTtl(ttl);
-    const size = estimateByteSize(entry.body);
     const stored: CacheEntry = { ...entry, expiresAt, hits: 1, size };
     this._store.set(key, stored);
     this._totalByteSize += size;
@@ -187,6 +245,34 @@ export class MemorizeStore {
   }
 
   /**
+   * Async variant of {@link getAll} that yields between batches to reduce
+   * event-loop blocking on large stores.
+   *
+   * @param options - Batch options.
+   * @returns All active cache entries keyed by cache key.
+   */
+  async getAllAsync(options?: MemorizeBatchOptions): Promise<Record<string, CacheInfo>> {
+    const batchSize = normalizeBatchSize(options);
+    const result: Record<string, CacheInfo> = {};
+    let scanned = 0;
+
+    for (const [key, entry] of this._store) {
+      if (entry.expiresAt && Date.now() >= entry.expiresAt) {
+        this._evict(key, MemorizeEventType.Expire);
+      } else {
+        result[key] = this._format(key, entry);
+      }
+
+      scanned++;
+      if (scanned % batchSize === 0) {
+        await yieldToEventLoop();
+      }
+    }
+
+    return result;
+  }
+
+  /**
    * Removes a single entry from the cache. Emits a {@link MemorizeEventType.Delete} event.
    *
    * @param key - The cache key to remove.
@@ -223,6 +309,35 @@ export class MemorizeStore {
   }
 
   /**
+   * Async variant of {@link deleteMatching} that yields between batches to
+   * reduce event-loop blocking on large stores.
+   *
+   * @param pattern - Glob pattern to match against cache keys.
+   * @param options - Batch options.
+   * @returns The number of entries removed.
+   */
+  async deleteMatchingAsync(pattern: string, options?: MemorizeBatchOptions): Promise<number> {
+    const regex = globToRegex(pattern);
+    const batchSize = normalizeBatchSize(options);
+    let count = 0;
+    let scanned = 0;
+
+    for (const key of this._store.keys()) {
+      if (regex.test(key) && this._store.has(key)) {
+        this._evict(key, MemorizeEventType.Delete);
+        count++;
+      }
+
+      scanned++;
+      if (scanned % batchSize === 0) {
+        await yieldToEventLoop();
+      }
+    }
+
+    return count;
+  }
+
+  /**
    * Removes all entries from the cache. Emits a {@link MemorizeEventType.Delete} event
    * for each entry.
    */
@@ -230,6 +345,32 @@ export class MemorizeStore {
     for (const key of [...this._store.keys()]) {
       this._evict(key, MemorizeEventType.Delete);
     }
+  }
+
+  /**
+   * Async variant of {@link clear} that yields between batches to reduce
+   * event-loop blocking on large stores.
+   *
+   * @param options - Batch options.
+   * @returns The number of entries removed.
+   */
+  async clearAsync(options?: MemorizeBatchOptions): Promise<number> {
+    const batchSize = normalizeBatchSize(options);
+    const keys = [...this._store.keys()];
+    let count = 0;
+
+    for (let i = 0; i < keys.length; i++) {
+      if (this._store.has(keys[i])) {
+        this._evict(keys[i], MemorizeEventType.Delete);
+        count++;
+      }
+
+      if ((i + 1) % batchSize === 0 && i + 1 < keys.length) {
+        await yieldToEventLoop();
+      }
+    }
+
+    return count;
   }
 
   /**
@@ -255,6 +396,8 @@ export class MemorizeStore {
     return {
       entries: this._store.size,
       maxEntries: this._maxEntries ?? null,
+      maxValueBytes: this._maxValueBytes ?? null,
+      maxTotalBytes: this._maxTotalBytes ?? null,
       byteSize: this._totalByteSize,
     };
   }
@@ -291,18 +434,32 @@ export class MemorizeStore {
     }
   }
 
-  private _evict(key: string, reason: MemorizeEventType.Delete | MemorizeEventType.Expire | MemorizeEventType.Evict): void {
+  private _canStoreSize(size: number, limit: number | undefined, limitName: string): boolean {
+    if (limit === undefined || size <= limit) return true;
+
+    if (this._sizeLimitAction === 'throw') {
+      throw new RangeError(`${limitName} exceeded`);
+    }
+
+    return false;
+  }
+
+  private _removeStoredEntry(key: string): boolean {
     if (this._timers.has(key)) {
       clearTimeout(this._timers.get(key)!);
       this._timers.delete(key);
     }
     const entry = this._store.get(key);
-    if (entry) {
-      this._totalByteSize = Math.max(0, this._totalByteSize - entry.size);
-    }
+    if (!entry) return false;
+    this._totalByteSize = Math.max(0, this._totalByteSize - entry.size);
     this._store.delete(key);
+    return true;
+  }
+
+  private _evict(key: string, reason: MemorizeEventType.Delete | MemorizeEventType.Expire | MemorizeEventType.Evict): void {
+    const removed = this._removeStoredEntry(key);
     this._emit(reason, { type: reason, key });
-    if (this._store.size === 0) {
+    if (removed && this._store.size === 0) {
       this._emit(MemorizeEventType.Empty, { type: MemorizeEventType.Empty });
     }
   }
