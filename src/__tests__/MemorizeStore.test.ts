@@ -404,7 +404,7 @@ describe('MemorizeStore', () => {
       expect(info!.expiresAt).toBeNull();
     });
 
-    it('unrefs TTL timers so they do not keep the process alive', () => {
+    it('unrefs the shared TTL scheduler so it does not keep the process alive', () => {
       jest.useRealTimers();
       const unref = jest.fn();
       const setTimeoutSpy = jest
@@ -420,7 +420,28 @@ describe('MemorizeStore', () => {
       }
     });
 
-    it('does not create a TTL timer for Infinity', () => {
+    it('uses a single shared TTL scheduler for multiple entries', () => {
+      const setTimeoutSpy = jest.spyOn(global, 'setTimeout');
+      store.set('/a', entry(), 1000);
+      store.set('/b', entry(), 2000);
+
+      expect(setTimeoutSpy).toHaveBeenCalledTimes(1);
+      setTimeoutSpy.mockRestore();
+    });
+
+    it('reprograms the shared TTL scheduler when an earlier entry is added', () => {
+      const setTimeoutSpy = jest.spyOn(global, 'setTimeout');
+      const clearTimeoutSpy = jest.spyOn(global, 'clearTimeout');
+      store.set('/later', entry(), 2000);
+      store.set('/earlier', entry(), 1000);
+
+      expect(setTimeoutSpy).toHaveBeenCalledTimes(2);
+      expect(clearTimeoutSpy).toHaveBeenCalledTimes(1);
+      setTimeoutSpy.mockRestore();
+      clearTimeoutSpy.mockRestore();
+    });
+
+    it('does not create a TTL scheduler for Infinity', () => {
       const setTimeoutSpy = jest.spyOn(global, 'setTimeout');
       store.set('/users', entry(), Infinity);
       expect(setTimeoutSpy).not.toHaveBeenCalled();
@@ -627,15 +648,18 @@ describe('MemorizeStore', () => {
       expect(s.get('/a')!.body).toBe('updated');
     });
 
-    it('clears TTL timer of evicted entry', () => {
+    it('does not expire unrelated entries after evicting a scheduled entry', () => {
       jest.useFakeTimers();
       const s = new MemorizeStore(2);
       s.set('/a', entry(), 10_000);
-      s.set('/b', entry());
+      s.set('/b', entry('b'), Infinity);
       s.set('/c', entry()); // evicts /a
-      // Timer for /a should be cleared; advancing time should not throw
+
       jest.advanceTimersByTime(10_001);
+
       expect(s.get('/a')).toBeNull();
+      expect(s.get('/b')).not.toBeNull();
+      expect(s.get('/c')).not.toBeNull();
       jest.useRealTimers();
     });
 

@@ -58,9 +58,9 @@ function estimateByteSize(value: unknown): number {
   }
 }
 
-function normalizeTtl(ttl?: number | null): { expiresAt: number | null; timerTtl: number | null } {
+function normalizeTtl(ttl?: number | null): { expiresAt: number | null } {
   if (ttl === Infinity) {
-    return { expiresAt: null, timerTtl: null };
+    return { expiresAt: null };
   }
 
   const effectiveTtl = ttl ?? DEFAULT_TTL;
@@ -73,7 +73,7 @@ function normalizeTtl(ttl?: number | null): { expiresAt: number | null; timerTtl
     throw new RangeError('ttl must be greater than or equal to 0');
   }
 
-  return { expiresAt: Date.now() + effectiveTtl, timerTtl: effectiveTtl };
+  return { expiresAt: Date.now() + effectiveTtl };
 }
 
 function normalizeBatchSize(options?: MemorizeBatchOptions): number {
@@ -108,7 +108,8 @@ function yieldToEventLoop(): Promise<void> {
  */
 export class MemorizeStore {
   private _store = new Map<string, CacheEntry>();
-  private _timers = new Map<string, ReturnType<typeof setTimeout>>();
+  private _expiryTimer: ReturnType<typeof setTimeout> | null = null;
+  private _nextExpiryAt: number | null = null;
   private _totalByteSize = 0;
   private _listeners: ListenerMap = {
     [MemorizeEventType.Set]:    [],
@@ -175,9 +176,7 @@ export class MemorizeStore {
     if (!this._canStoreSize(size, this._maxValueBytes, 'maxValueBytes')) return;
     if (!this._canStoreSize(size, this._maxTotalBytes, 'maxTotalBytes')) return;
 
-    if (existing) {
-      this._removeStoredEntry(key);
-    }
+    const removed = existing ? this._removeStoredEntry(key) : null;
 
     if (this._maxEntries && this._store.size >= this._maxEntries) {
       this._evictLRU();
@@ -191,21 +190,17 @@ export class MemorizeStore {
       this._evictLRU();
     }
 
-    const { expiresAt, timerTtl } = normalizeTtl(ttl);
+    const { expiresAt } = normalizeTtl(ttl);
     const stored: CacheEntry = { ...entry, expiresAt, hits: 1, size };
     this._store.set(key, stored);
     this._totalByteSize += size;
 
     this._emit(MemorizeEventType.Set, { type: MemorizeEventType.Set, key, ...entry, expiresAt, size });
 
-    if (timerTtl !== null) {
-      const timer = setTimeout(() => {
-        this._evict(key, MemorizeEventType.Expire);
-      }, timerTtl);
-
-      if (typeof timer === 'object' && 'unref' in timer) timer.unref();
-      this._timers.set(key, timer);
+    if (removed?.expiresAt === this._nextExpiryAt) {
+      this._scheduleNextExpiry();
     }
+    this._scheduleExpiryFor(expiresAt);
   }
 
   /**
@@ -444,16 +439,12 @@ export class MemorizeStore {
     return false;
   }
 
-  private _removeStoredEntry(key: string): boolean {
-    if (this._timers.has(key)) {
-      clearTimeout(this._timers.get(key)!);
-      this._timers.delete(key);
-    }
+  private _removeStoredEntry(key: string): CacheEntry | null {
     const entry = this._store.get(key);
-    if (!entry) return false;
+    if (!entry) return null;
     this._totalByteSize = Math.max(0, this._totalByteSize - entry.size);
     this._store.delete(key);
-    return true;
+    return entry;
   }
 
   private _evict(key: string, reason: MemorizeEventType.Delete | MemorizeEventType.Expire | MemorizeEventType.Evict): void {
@@ -461,6 +452,73 @@ export class MemorizeStore {
     this._emit(reason, { type: reason, key });
     if (removed && this._store.size === 0) {
       this._emit(MemorizeEventType.Empty, { type: MemorizeEventType.Empty });
+    }
+    if (removed) {
+      this._scheduleAfterRemoval(removed);
+    }
+  }
+
+  private _scheduleAfterRemoval(removed: CacheEntry): void {
+    if (removed.expiresAt !== null && removed.expiresAt === this._nextExpiryAt) {
+      this._scheduleNextExpiry();
+    }
+  }
+
+  private _scheduleNextExpiry(): void {
+    this._scheduleExpiryAt(this._findNextExpiryAt());
+  }
+
+  private _scheduleExpiryFor(expiresAt: number | null): void {
+    if (expiresAt === null) return;
+    if (this._nextExpiryAt !== null && expiresAt >= this._nextExpiryAt) return;
+    this._scheduleExpiryAt(expiresAt);
+  }
+
+  private _scheduleExpiryAt(nextExpiryAt: number | null): void {
+    if (nextExpiryAt === this._nextExpiryAt) return;
+
+    this._clearExpiryTimer();
+    this._nextExpiryAt = nextExpiryAt;
+
+    if (nextExpiryAt === null) return;
+
+    const delay = Math.max(0, nextExpiryAt - Date.now());
+    const timer = setTimeout(() => {
+      this._expiryTimer = null;
+      this._nextExpiryAt = null;
+      this._evictExpiredEntries();
+      this._scheduleNextExpiry();
+    }, delay);
+
+    if (typeof timer === 'object' && 'unref' in timer) timer.unref();
+    this._expiryTimer = timer;
+  }
+
+  private _clearExpiryTimer(): void {
+    if (!this._expiryTimer) return;
+    clearTimeout(this._expiryTimer);
+    this._expiryTimer = null;
+  }
+
+  private _findNextExpiryAt(): number | null {
+    let nextExpiryAt: number | null = null;
+
+    for (const entry of this._store.values()) {
+      if (entry.expiresAt === null) continue;
+      if (nextExpiryAt === null || entry.expiresAt < nextExpiryAt) {
+        nextExpiryAt = entry.expiresAt;
+      }
+    }
+
+    return nextExpiryAt;
+  }
+
+  private _evictExpiredEntries(): void {
+    const now = Date.now();
+    for (const [key, entry] of [...this._store]) {
+      if (entry.expiresAt !== null && now >= entry.expiresAt) {
+        this._evict(key, MemorizeEventType.Expire);
+      }
     }
   }
 
