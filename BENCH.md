@@ -14,6 +14,8 @@ variants and reports the maximum event-loop delay observed during each task.
 
 ## Event Loop Pressure
 
+### Run 1
+
 Run with `50_000` entries and `25` payload items per entry:
 
 | Operation | Duration | Max event-loop block | Result |
@@ -94,3 +96,26 @@ range in the latest run.
 Recommended follow-up: keep separate benchmark cases for finite TTL and
 `ttl: Infinity` when comparing pure serialization throughput against full cache
 bookkeeping.
+
+## Run 3: Batched Lazy Expiry Cleanup
+
+After batching lazy expiry cleanup in `getAll()` / `getAllAsync()` so the TTL
+scheduler reprograms once after removing multiple expired entries.
+
+Command:
+
+```bash
+EVENTLOOP_ENTRIES=50000 npm run bench:eventloop
+```
+
+| Operation | Duration | Max event-loop block | Result |
+|-----------|----------|----------------------|--------|
+| `populate set()` | `1049.43 ms` | `1051.20 ms` | `50000` |
+| `hot getValue()` | `707.05 ms` | `707.26 ms` | `50000` |
+| `getAll()` | `48.97 ms` | `50.50 ms` | `50000` |
+| `deleteMatching(key:1*)` | `10.90 ms` | `12.21 ms` | `11111` |
+| `clear()` | `12.90 ms` | `14.28 ms` | `38889` |
+| `populate async target` | `1052.48 ms` | `1052.77 ms` | `50000` |
+| `getAllAsync(1000)` | `55.44 ms` | `11.27 ms` | `50000` |
+| `deleteMatchingAsync(key:1*, 1000)` | `11.80 ms` | `1.66 ms` | `11111` |
+| `clearAsync(1000)` | `16.76 ms` | `2.45 ms` | `38889` |
