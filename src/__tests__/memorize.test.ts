@@ -521,6 +521,38 @@ describe('memorize middleware', () => {
       jest.useRealTimers();
     });
 
+    it('does not let an older setAsync overwrite a newer set', async () => {
+      const cache = memorize();
+      const pendingSet = cache.setAsync('race-key', 'old');
+
+      cache.set('race-key', 'new');
+      await pendingSet;
+
+      expect(cache.getValue('race-key')).toBe('new');
+    });
+
+    it('does not let setAsync write after clear and a newer set', async () => {
+      const cache = memorize();
+      const pendingSet = cache.setAsync('race-key', 'old');
+
+      cache.clear();
+      cache.set('race-key', 'new');
+      await pendingSet;
+
+      expect(cache.getValue('race-key')).toBe('new');
+    });
+
+    it('does not let setAsync write after deleteMatching and a newer set', async () => {
+      const cache = memorize();
+      const pendingSet = cache.setAsync('race-key', 'old');
+
+      cache.deleteMatching('race-*');
+      cache.set('race-key', 'new');
+      await pendingSet;
+
+      expect(cache.getValue('race-key')).toBe('new');
+    });
+
     it('setAsync/getValueAsync can offload JSON serialization to a worker', async () => {
       const cache = memorize({ serializer: 'json', asyncSerializer: 'worker' });
 
@@ -575,6 +607,23 @@ describe('memorize middleware', () => {
       expect(factory).toHaveBeenCalledTimes(1);
     });
 
+    it('coalesces concurrent remember calls for the same key', async () => {
+      const cache = memorize();
+      const factory = jest.fn().mockImplementation(async () => {
+        await new Promise((resolve) => setImmediate(resolve));
+        return { data: ['once'] };
+      });
+
+      const [first, second] = await Promise.all([
+        cache.remember('coalesced', factory),
+        cache.remember('coalesced', factory),
+      ]);
+
+      expect(first).toEqual({ data: ['once'] });
+      expect(second).toEqual({ data: ['once'] });
+      expect(factory).toHaveBeenCalledTimes(1);
+    });
+
     it('returns the cached value on second call', async () => {
       const cache = memorize();
       const factory = jest.fn().mockResolvedValue({ data: 'original' });
@@ -621,6 +670,23 @@ describe('memorize middleware', () => {
       await cache.rememberAsync('list', factory);
       await cache.rememberAsync('list', factory);
 
+      expect(factory).toHaveBeenCalledTimes(1);
+    });
+
+    it('coalesces concurrent rememberAsync calls for the same key', async () => {
+      const cache = memorize();
+      const factory = jest.fn().mockImplementation(async () => {
+        await new Promise((resolve) => setImmediate(resolve));
+        return { data: ['once'] };
+      });
+
+      const [first, second] = await Promise.all([
+        cache.rememberAsync('coalesced-async', factory),
+        cache.rememberAsync('coalesced-async', factory),
+      ]);
+
+      expect(first).toEqual({ data: ['once'] });
+      expect(second).toEqual({ data: ['once'] });
       expect(factory).toHaveBeenCalledTimes(1);
     });
 
