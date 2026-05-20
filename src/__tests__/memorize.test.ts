@@ -554,7 +554,7 @@ describe('memorize middleware', () => {
     });
 
     it('setAsync/getValueAsync can offload JSON serialization to a worker', async () => {
-      const cache = memorize({ serializer: 'json', asyncSerializer: 'worker' });
+      const cache = memorize({ serializer: 'json', asyncSerializer: 'worker', asyncSerializerThresholdBytes: 0 });
 
       await cache.setAsync('worker-key', { ok: true, items: [1, 2, 3] });
 
@@ -566,6 +566,7 @@ describe('memorize middleware', () => {
         serializer: 'json',
         asyncSerializer: 'worker',
         asyncSerializerWorkers: 1000,
+        asyncSerializerThresholdBytes: 0,
       });
 
       await Promise.all([
@@ -577,6 +578,18 @@ describe('memorize middleware', () => {
       await expect(cache.getValueAsync('worker-key-b')).resolves.toEqual({ ok: 'b' });
     });
 
+    it('uses main-thread yielding for values below asyncSerializerThresholdBytes', async () => {
+      const cache = memorize({
+        serializer: 'json',
+        asyncSerializer: 'worker',
+        asyncSerializerThresholdBytes: 1_000_000,
+      });
+
+      await cache.setAsync('small-worker-key', { ok: true });
+
+      await expect(cache.getValueAsync('small-worker-key')).resolves.toEqual({ ok: true });
+    });
+
     it('rejects invalid asyncSerializerWorkers values', () => {
       expect(() => memorize({
         serializer: 'json',
@@ -585,8 +598,16 @@ describe('memorize middleware', () => {
       })).toThrow(RangeError);
     });
 
+    it('rejects invalid asyncSerializerThresholdBytes values', () => {
+      expect(() => memorize({
+        serializer: 'json',
+        asyncSerializer: 'worker',
+        asyncSerializerThresholdBytes: -1,
+      })).toThrow(RangeError);
+    });
+
     it('setAsync/getValueAsync can offload v8 serialization to a worker', async () => {
-      const cache = memorize({ serializer: 'v8', asyncSerializer: 'worker' });
+      const cache = memorize({ serializer: 'v8', asyncSerializer: 'worker', asyncSerializerThresholdBytes: 0 });
       const value = { createdAt: new Date('2026-01-01T00:00:00.000Z'), tags: new Set(['a', 'b']) };
 
       await cache.setAsync('worker-key', value);
@@ -715,7 +736,7 @@ describe('memorize middleware', () => {
     });
 
     it('rememberAsync works with worker serialization', async () => {
-      const cache = memorize({ serializer: 'json', asyncSerializer: 'worker' });
+      const cache = memorize({ serializer: 'json', asyncSerializer: 'worker', asyncSerializerThresholdBytes: 0 });
       const factory = jest.fn().mockResolvedValue({ data: ['worker'] });
 
       const first = await cache.rememberAsync('worker-list', factory);

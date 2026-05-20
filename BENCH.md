@@ -182,3 +182,76 @@ Event loop pressure from `npm run bench` with `25_000` entries:
 | `getAllAsync(1000)` | `18.95 ms` | `4.67 ms` | `25000` |
 | `deleteMatchingAsync(key:1*, 1000)` | `10.12 ms` | `2.47 ms` | `11111` |
 | `clearAsync(1000)` | `5.91 ms` | `2.19 ms` | `13889` |
+
+## Run 5: Worker Threshold And Async Cache Bench
+
+After adding `asyncSerializerThresholdBytes` and a dedicated async cache
+benchmark for yield vs worker, small vs large payloads, and worker pool sizes.
+
+Command:
+
+```bash
+npm run bench
+```
+
+Serializer throughput:
+
+| Task | Throughput |
+|------|------------|
+| JSON serialize, simple object | `~1.65M ops/s` |
+| v8 serialize, simple object | `~325k ops/s` |
+| JSON deserialize, simple object | `~679k ops/s` |
+| v8 deserialize, simple object | `~160k ops/s` |
+| JSON serialize, large array 500 | `~6,303 ops/s` |
+| v8 serialize, large array 500 | `~5,692 ops/s` |
+| JSON deserialize, large array 500 | `~4,314 ops/s` |
+| v8 deserialize, large array 500 | `~2,059 ops/s` |
+
+Cache throughput:
+
+| Task | Throughput |
+|------|------------|
+| JSON `set()` | `~959k ops/s` |
+| v8 `set()` | `~312k ops/s` |
+| JSON `getValue()` hot entries | `~849k ops/s` |
+| v8 `getValue()` hot entries | `~330k ops/s` |
+| JSON `remember()` hit | `~380k ops/s` |
+| v8 `remember()` hit | `~213k ops/s` |
+
+Async cache throughput:
+
+| Task | Throughput |
+|------|------------|
+| yield `setAsync` small payload | `~157k ops/s` |
+| worker `setAsync` small payload | `~17.5k ops/s` |
+| yield `setAsync` large payload | `~615 ops/s` |
+| worker(1) `setAsync` large payload | `~99 ops/s` |
+| worker(auto) `setAsync` large payload | `~109 ops/s` |
+| worker(4) `setAsync` large payload | `~110 ops/s` |
+| yield `getValueAsync` large payload | `~434 ops/s` |
+| worker(1) `getValueAsync` large payload | `~116 ops/s` |
+| worker(auto) `getValueAsync` large payload | `~116 ops/s` |
+| worker(4) `getValueAsync` large payload | `~104 ops/s` |
+
+Event loop pressure from `npm run bench` with `25_000` entries:
+
+| Operation | Duration | Max event-loop block | Result |
+|-----------|----------|----------------------|--------|
+| `populate set()` | `535.22 ms` | `536.87 ms` | `25000` |
+| `hot getValue()` | `359.45 ms` | `360.71 ms` | `25000` |
+| `getAll()` | `31.94 ms` | `33.19 ms` | `25000` |
+| `deleteMatching(key:1*)` | `8.82 ms` | `10.08 ms` | `11111` |
+| `clear()` | `5.90 ms` | `7.16 ms` | `13889` |
+| `populate async target` | `481.80 ms` | `483.13 ms` | `25000` |
+| `getAllAsync(1000)` | `25.53 ms` | `4.53 ms` | `25000` |
+| `deleteMatchingAsync(key:1*, 1000)` | `7.70 ms` | `1.90 ms` | `11111` |
+| `clearAsync(1000)` | `8.11 ms` | `2.24 ms` | `13889` |
+
+Notes:
+
+- Worker offload is significantly slower for small payloads in this sequential
+  benchmark, which validates keeping a non-zero default threshold.
+- Worker offload is also slower for the large JSON payload in this benchmark,
+  likely because structured-clone transfer overhead dominates. Worker mode may
+  still be useful when protecting event-loop responsiveness matters more than
+  per-operation latency, or under parallel request pressure.

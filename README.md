@@ -513,6 +513,7 @@ Creates a cache instance. Returns a `Memorize` object.
 | `sizeLimitAction` | `'skip' \| 'throw'` | `'skip'` | Behavior when one entry exceeds a byte limit. |
 | `asyncSerializer` | `'yield' \| 'worker'` | `'yield'` | Backend for `setAsync` / `getValueAsync` / `rememberAsync`. `'worker'` offloads built-in serializers to `worker_threads`. |
 | `asyncSerializerWorkers` | `'auto' \| number` | `'auto'` | Maximum lazy worker count for `asyncSerializer: 'worker'`. Numeric values are clamped to available CPU parallelism and an internal safety cap. |
+| `asyncSerializerThresholdBytes` | `number` | `64_000` | Minimum estimated serialized size before async direct-cache APIs offload work to a worker. Smaller values use cooperative yielding. |
 | `serializer` | `'auto' \| 'json' \| 'v8' \| Serializer` | `'auto'` | Serializer for `set()` / `getValue()`. `'auto'` uses `node:v8` when available, falls back to JSON. Does not affect HTTP middleware caching. |
 
 ### `cache(options?)` / `cache.express(options?)`
