@@ -12,6 +12,10 @@ function serializedByteSize(body: string | Buffer): number {
   return Buffer.isBuffer(body) ? body.byteLength : Buffer.byteLength(body);
 }
 
+function yieldToEventLoop(): Promise<void> {
+  return new Promise((resolve) => setImmediate(resolve));
+}
+
 /**
  * Creates an in-memory cache instance.
  *
@@ -87,6 +91,11 @@ export function memorize(options: MemorizeOptions = {}): Memorize {
     store.set(key, { body, statusCode: 200, contentType, size: serializedByteSize(body) }, entryTtl ?? ttl);
   };
 
+  cache.setAsync = async <T>(key: string, value: T, entryTtl?: number): Promise<void> => {
+    await yieldToEventLoop();
+    cache.set(key, value, entryTtl);
+  };
+
   cache.getValue = <T>(key: string): T | undefined => {
     const entry = store.getRaw(key);
     if (!entry) return undefined;
@@ -97,11 +106,24 @@ export function memorize(options: MemorizeOptions = {}): Memorize {
     }
   };
 
+  cache.getValueAsync = async <T>(key: string): Promise<T | undefined> => {
+    await yieldToEventLoop();
+    return cache.getValue<T>(key);
+  };
+
   cache.remember = async <T>(key: string, factory: () => T | Promise<T>, rememberTtl?: number): Promise<T> => {
     const existing = cache.getValue<T>(key);
     if (existing !== undefined) return existing;
     const value = await factory();
     cache.set(key, value, rememberTtl);
+    return value;
+  };
+
+  cache.rememberAsync = async <T>(key: string, factory: () => T | Promise<T>, rememberTtl?: number): Promise<T> => {
+    const existing = await cache.getValueAsync<T>(key);
+    if (existing !== undefined) return existing;
+    const value = await factory();
+    await cache.setAsync(key, value, rememberTtl);
     return value;
   };
 
