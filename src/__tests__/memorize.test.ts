@@ -520,6 +520,39 @@ describe('memorize middleware', () => {
       expect(cache.getValue('temp')).toBeUndefined();
       jest.useRealTimers();
     });
+
+    it('setAsync/getValueAsync can offload JSON serialization to a worker', async () => {
+      const cache = memorize({ serializer: 'json', asyncSerializer: 'worker' });
+
+      await cache.setAsync('worker-key', { ok: true, items: [1, 2, 3] });
+
+      await expect(cache.getValueAsync('worker-key')).resolves.toEqual({ ok: true, items: [1, 2, 3] });
+    });
+
+    it('setAsync/getValueAsync can offload v8 serialization to a worker', async () => {
+      const cache = memorize({ serializer: 'v8', asyncSerializer: 'worker' });
+      const value = { createdAt: new Date('2026-01-01T00:00:00.000Z'), tags: new Set(['a', 'b']) };
+
+      await cache.setAsync('worker-key', value);
+      const result = await cache.getValueAsync<typeof value>('worker-key');
+
+      expect(result!.createdAt).toEqual(value.createdAt);
+      expect([...result!.tags]).toEqual(['a', 'b']);
+    });
+
+    it('async worker mode falls back to cooperative yielding for custom serializers', async () => {
+      const cache = memorize({
+        asyncSerializer: 'worker',
+        serializer: {
+          serialize: (value) => `custom:${JSON.stringify(value)}`,
+          deserialize: (data) => JSON.parse((data as string).replace(/^custom:/, '')),
+        },
+      });
+
+      await cache.setAsync('custom-key', { ok: true });
+
+      await expect(cache.getValueAsync('custom-key')).resolves.toEqual({ ok: true });
+    });
   });
 
   describe('cache.remember', () => {
@@ -588,6 +621,18 @@ describe('memorize middleware', () => {
       await cache.rememberAsync('list', factory);
       await cache.rememberAsync('list', factory);
 
+      expect(factory).toHaveBeenCalledTimes(1);
+    });
+
+    it('rememberAsync works with worker serialization', async () => {
+      const cache = memorize({ serializer: 'json', asyncSerializer: 'worker' });
+      const factory = jest.fn().mockResolvedValue({ data: ['worker'] });
+
+      const first = await cache.rememberAsync('worker-list', factory);
+      const second = await cache.rememberAsync('worker-list', factory);
+
+      expect(first).toEqual({ data: ['worker'] });
+      expect(second).toEqual({ data: ['worker'] });
       expect(factory).toHaveBeenCalledTimes(1);
     });
   });
