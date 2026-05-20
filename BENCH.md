@@ -30,7 +30,7 @@ the longest event-loop pause substantially.
 
 ## Serializer Throughput
 
-From `npm run bench`:
+### Run 1
 
 | Task | Throughput |
 |------|------------|
@@ -43,9 +43,25 @@ From `npm run bench`:
 | JSON deserialize, large array 500 | `~4,360 ops/s` |
 | v8 deserialize, large array 500 | `~2,431 ops/s` |
 
+### Run 2
+
+After optimizing the shared TTL scheduler to track the key that owns the next
+expiry:
+
+| Task | Throughput |
+|------|------------|
+| JSON serialize, simple object | `~1.72M ops/s` |
+| v8 serialize, simple object | `~408k ops/s` |
+| JSON deserialize, simple object | `~716k ops/s` |
+| v8 deserialize, simple object | `~182k ops/s` |
+| JSON serialize, large array 500 | `~5,957 ops/s` |
+| v8 serialize, large array 500 | `~5,638 ops/s` |
+| JSON deserialize, large array 500 | `~4,203 ops/s` |
+| v8 deserialize, large array 500 | `~1,973 ops/s` |
+
 ## Cache Throughput
 
-From `npm run bench`:
+### Run 1
 
 | Task | Throughput |
 |------|------------|
@@ -54,13 +70,27 @@ From `npm run bench`:
 | JSON `set()` | `~85k ops/s` |
 | v8 `set()` | `~69k ops/s` |
 
+### Run 2
+
+After optimizing the shared TTL scheduler to track the key that owns the next
+expiry:
+
+| Task | Throughput |
+|------|------------|
+| JSON `getValue()` hot entries | `~887k ops/s` |
+| v8 `getValue()` hot entries | `~291k ops/s` |
+| JSON `set()` | `~1.04M ops/s` |
+| v8 `set()` | `~264k ops/s` |
+
 ## Notes
 
-`cache.set()` is slower in the full benchmark than earlier runs. The likely
-cause is that this benchmark uses the default finite TTL, so the shared TTL
-scheduler participates in many insertions. When measuring serialization-only
-set throughput, use `ttl: Infinity` to remove TTL scheduling from the benchmark.
+An earlier run showed `cache.set()` dropping to roughly `~85k ops/s` with the
+default finite TTL. That was traced to the shared TTL scheduler re-scanning when
+overwritten entries had the same `expiresAt` as the scheduled expiry. The
+scheduler now tracks the key that owns the next expiry, so overwriting unrelated
+entries does not reprogram the timer. `cache.set()` returned to the expected
+range in the latest run.
 
-Recommended follow-up: keep the scheduler optimized so it only reprograms when
-the new `expiresAt` is earlier than the currently scheduled expiry, and keep
-separate benchmark cases for finite TTL and `ttl: Infinity`.
+Recommended follow-up: keep separate benchmark cases for finite TTL and
+`ttl: Infinity` when comparing pure serialization throughput against full cache
+bookkeeping.

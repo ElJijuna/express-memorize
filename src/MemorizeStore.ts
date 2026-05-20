@@ -110,6 +110,7 @@ export class MemorizeStore {
   private _store = new Map<string, CacheEntry>();
   private _expiryTimer: ReturnType<typeof setTimeout> | null = null;
   private _nextExpiryAt: number | null = null;
+  private _nextExpiryKey: string | null = null;
   private _totalByteSize = 0;
   private _listeners: ListenerMap = {
     [MemorizeEventType.Set]:    [],
@@ -197,10 +198,10 @@ export class MemorizeStore {
 
     this._emit(MemorizeEventType.Set, { type: MemorizeEventType.Set, key, ...entry, expiresAt, size });
 
-    if (removed?.expiresAt === this._nextExpiryAt) {
+    if (removed && key === this._nextExpiryKey) {
       this._scheduleNextExpiry();
     }
-    this._scheduleExpiryFor(expiresAt);
+    this._scheduleExpiryFor(key, expiresAt);
   }
 
   /**
@@ -454,30 +455,32 @@ export class MemorizeStore {
       this._emit(MemorizeEventType.Empty, { type: MemorizeEventType.Empty });
     }
     if (removed) {
-      this._scheduleAfterRemoval(removed);
+      this._scheduleAfterRemoval(removed, key);
     }
   }
 
-  private _scheduleAfterRemoval(removed: CacheEntry): void {
-    if (removed.expiresAt !== null && removed.expiresAt === this._nextExpiryAt) {
+  private _scheduleAfterRemoval(_removed: CacheEntry, key: string): void {
+    if (key === this._nextExpiryKey) {
       this._scheduleNextExpiry();
     }
   }
 
   private _scheduleNextExpiry(): void {
-    this._scheduleExpiryAt(this._findNextExpiryAt());
+    const next = this._findNextExpiry();
+    this._scheduleExpiryAt(next?.key ?? null, next?.expiresAt ?? null);
   }
 
-  private _scheduleExpiryFor(expiresAt: number | null): void {
+  private _scheduleExpiryFor(key: string, expiresAt: number | null): void {
     if (expiresAt === null) return;
     if (this._nextExpiryAt !== null && expiresAt >= this._nextExpiryAt) return;
-    this._scheduleExpiryAt(expiresAt);
+    this._scheduleExpiryAt(key, expiresAt);
   }
 
-  private _scheduleExpiryAt(nextExpiryAt: number | null): void {
-    if (nextExpiryAt === this._nextExpiryAt) return;
+  private _scheduleExpiryAt(nextExpiryKey: string | null, nextExpiryAt: number | null): void {
+    if (nextExpiryKey === this._nextExpiryKey && nextExpiryAt === this._nextExpiryAt) return;
 
     this._clearExpiryTimer();
+    this._nextExpiryKey = nextExpiryKey;
     this._nextExpiryAt = nextExpiryAt;
 
     if (nextExpiryAt === null) return;
@@ -485,6 +488,7 @@ export class MemorizeStore {
     const delay = Math.max(0, nextExpiryAt - Date.now());
     const timer = setTimeout(() => {
       this._expiryTimer = null;
+      this._nextExpiryKey = null;
       this._nextExpiryAt = null;
       this._evictExpiredEntries();
       this._scheduleNextExpiry();
@@ -500,17 +504,19 @@ export class MemorizeStore {
     this._expiryTimer = null;
   }
 
-  private _findNextExpiryAt(): number | null {
+  private _findNextExpiry(): { key: string; expiresAt: number } | null {
+    let nextKey: string | null = null;
     let nextExpiryAt: number | null = null;
 
-    for (const entry of this._store.values()) {
+    for (const [key, entry] of this._store) {
       if (entry.expiresAt === null) continue;
       if (nextExpiryAt === null || entry.expiresAt < nextExpiryAt) {
+        nextKey = key;
         nextExpiryAt = entry.expiresAt;
       }
     }
 
-    return nextExpiryAt;
+    return nextKey === null || nextExpiryAt === null ? null : { key: nextKey, expiresAt: nextExpiryAt };
   }
 
   private _evictExpiredEntries(): void {

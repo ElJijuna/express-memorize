@@ -441,6 +441,20 @@ describe('MemorizeStore', () => {
       clearTimeoutSpy.mockRestore();
     });
 
+    it('does not reprogram when overwriting a non-scheduled entry', () => {
+      const setTimeoutSpy = jest.spyOn(global, 'setTimeout');
+      const clearTimeoutSpy = jest.spyOn(global, 'clearTimeout');
+      store.set('/earliest', entry(), 1000);
+      store.set('/later', entry('v1'), 2000);
+
+      store.set('/later', entry('v2'), 2000);
+
+      expect(setTimeoutSpy).toHaveBeenCalledTimes(1);
+      expect(clearTimeoutSpy).not.toHaveBeenCalled();
+      setTimeoutSpy.mockRestore();
+      clearTimeoutSpy.mockRestore();
+    });
+
     it('does not create a TTL scheduler for Infinity', () => {
       const setTimeoutSpy = jest.spyOn(global, 'setTimeout');
       store.set('/users', entry(), Infinity);
