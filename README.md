@@ -512,6 +512,7 @@ Creates a cache instance. Returns a `Memorize` object.
 | `maxTotalBytes` | `number` | `undefined` | Maximum approximate byte size for the whole cache. LRU eviction when reached. |
 | `sizeLimitAction` | `'skip' \| 'throw'` | `'skip'` | Behavior when one entry exceeds a byte limit. |
 | `asyncSerializer` | `'yield' \| 'worker'` | `'yield'` | Backend for `setAsync` / `getValueAsync` / `rememberAsync`. `'worker'` offloads built-in serializers to `worker_threads`. |
+| `asyncSerializerWorkers` | `'auto' \| number` | `'auto'` | Maximum lazy worker count for `asyncSerializer: 'worker'`. Numeric values are clamped to available CPU parallelism and an internal safety cap. |
 | `serializer` | `'auto' \| 'json' \| 'v8' \| Serializer` | `'auto'` | Serializer for `set()` / `getValue()`. `'auto'` uses `node:v8` when available, falls back to JSON. Does not affect HTTP middleware caching. |
 
 ### `cache(options?)` / `cache.express(options?)`
