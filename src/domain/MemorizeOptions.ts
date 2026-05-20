@@ -56,6 +56,20 @@ export interface MemorizeOptions {
   sizeLimitAction?: 'skip' | 'throw';
 
   /**
+   * Async serializer backend used by `setAsync`, `getValueAsync`, and
+   * `rememberAsync`.
+   *
+   * - `'yield'` — yield to the event loop, then serialize on the main thread.
+   * - `'worker'` — offload built-in serializer work to `worker_threads`.
+   *
+   * Custom serializer objects always fall back to `'yield'` because functions
+   * cannot be transferred to a worker.
+   *
+   * @defaultValue 'yield'
+   */
+  asyncSerializer?: 'yield' | 'worker';
+
+  /**
    * Serializer used by {@link Memorize.set} and {@link Memorize.getValue}.
    *
    * - `'auto'` (default) — uses `node:v8` when available, falls back to JSON silently.

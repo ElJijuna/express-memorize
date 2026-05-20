@@ -4,6 +4,7 @@ import { MemorizeOptions } from './domain/MemorizeOptions';
 import { MemorizeCallOptions } from './domain/MemorizeCallOptions';
 import { createExpressMiddleware } from './adapters/express';
 import { createSerializer } from './serializer';
+import { createWorkerAsyncSerializer } from './asyncSerializer';
 export type { Serializer, SerializerOption } from './serializer';
 
 export type { Memorize, MemorizeOptions, MemorizeCallOptions };
@@ -73,10 +74,14 @@ export function memorize(options: MemorizeOptions = {}): Memorize {
     maxValueBytes,
     maxTotalBytes,
     sizeLimitAction,
+    asyncSerializer: asyncSerializerMode = 'yield',
     serializer: serializerOption,
   } = options;
   const store = new MemorizeStore({ maxEntries, maxValueBytes, maxTotalBytes, sizeLimitAction });
   const serializer = createSerializer(serializerOption);
+  const workerSerializer = asyncSerializerMode === 'worker'
+    ? createWorkerAsyncSerializer(serializerOption)
+    : null;
   const expressMiddleware = createExpressMiddleware(store, ttl);
 
   const cache = function (callOptions?: MemorizeCallOptions) {
@@ -93,7 +98,14 @@ export function memorize(options: MemorizeOptions = {}): Memorize {
 
   cache.setAsync = async <T>(key: string, value: T, entryTtl?: number): Promise<void> => {
     await yieldToEventLoop();
-    cache.set(key, value, entryTtl);
+    if (!workerSerializer) {
+      cache.set(key, value, entryTtl);
+      return;
+    }
+
+    const body = await workerSerializer.serialize(value);
+    const contentType = Buffer.isBuffer(body) ? 'application/octet-stream' : 'application/json';
+    store.set(key, { body, statusCode: 200, contentType, size: serializedByteSize(body) }, entryTtl ?? ttl);
   };
 
   cache.getValue = <T>(key: string): T | undefined => {
@@ -108,7 +120,15 @@ export function memorize(options: MemorizeOptions = {}): Memorize {
 
   cache.getValueAsync = async <T>(key: string): Promise<T | undefined> => {
     await yieldToEventLoop();
-    return cache.getValue<T>(key);
+    if (!workerSerializer) return cache.getValue<T>(key);
+
+    const entry = store.getRaw(key);
+    if (!entry) return undefined;
+    try {
+      return await workerSerializer.deserialize(entry.body as string | Buffer) as T;
+    } catch {
+      return undefined;
+    }
   };
 
   cache.remember = async <T>(key: string, factory: () => T | Promise<T>, rememberTtl?: number): Promise<T> => {
