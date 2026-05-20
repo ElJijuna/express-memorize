@@ -17,6 +17,12 @@ function yieldToEventLoop(): Promise<void> {
   return new Promise((resolve) => setImmediate(resolve));
 }
 
+function nextVersion(versions: Map<string, number>, key: string): number {
+  const version = (versions.get(key) ?? 0) + 1;
+  versions.set(key, version);
+  return version;
+}
+
 /**
  * Creates an in-memory cache instance.
  *
@@ -83,6 +89,9 @@ export function memorize(options: MemorizeOptions = {}): Memorize {
     ? createWorkerAsyncSerializer(serializerOption)
     : null;
   const expressMiddleware = createExpressMiddleware(store, ttl);
+  const keyVersions = new Map<string, number>();
+  const inFlightRemember = new Map<string, Promise<unknown>>();
+  let mutationEpoch = 0;
 
   const cache = function (callOptions?: MemorizeCallOptions) {
     return expressMiddleware(callOptions);
@@ -91,19 +100,27 @@ export function memorize(options: MemorizeOptions = {}): Memorize {
   cache.express = (callOptions?: MemorizeCallOptions) => expressMiddleware(callOptions);
 
   cache.set = <T>(key: string, value: T, entryTtl?: number): void => {
+    nextVersion(keyVersions, key);
     const body = serializer.serialize(value);
     const contentType = Buffer.isBuffer(body) ? 'application/octet-stream' : 'application/json';
     store.set(key, { body, statusCode: 200, contentType, size: serializedByteSize(body) }, entryTtl ?? ttl);
   };
 
   cache.setAsync = async <T>(key: string, value: T, entryTtl?: number): Promise<void> => {
+    const version = nextVersion(keyVersions, key);
+    const epoch = mutationEpoch;
     await yieldToEventLoop();
     if (!workerSerializer) {
-      cache.set(key, value, entryTtl);
+      if (keyVersions.get(key) !== version || mutationEpoch !== epoch) return;
+      const body = serializer.serialize(value);
+      if (keyVersions.get(key) !== version || mutationEpoch !== epoch) return;
+      const contentType = Buffer.isBuffer(body) ? 'application/octet-stream' : 'application/json';
+      store.set(key, { body, statusCode: 200, contentType, size: serializedByteSize(body) }, entryTtl ?? ttl);
       return;
     }
 
     const body = await workerSerializer.serialize(value);
+    if (keyVersions.get(key) !== version || mutationEpoch !== epoch) return;
     const contentType = Buffer.isBuffer(body) ? 'application/octet-stream' : 'application/json';
     store.set(key, { body, statusCode: 200, contentType, size: serializedByteSize(body) }, entryTtl ?? ttl);
   };
@@ -134,27 +151,72 @@ export function memorize(options: MemorizeOptions = {}): Memorize {
   cache.remember = async <T>(key: string, factory: () => T | Promise<T>, rememberTtl?: number): Promise<T> => {
     const existing = cache.getValue<T>(key);
     if (existing !== undefined) return existing;
-    const value = await factory();
-    cache.set(key, value, rememberTtl);
-    return value;
+    const inFlight = inFlightRemember.get(key);
+    if (inFlight) return inFlight as Promise<T>;
+
+    const promise = (async () => {
+      const value = await factory();
+      cache.set(key, value, rememberTtl);
+      return value;
+    })();
+
+    inFlightRemember.set(key, promise);
+    try {
+      return await promise;
+    } finally {
+      if (inFlightRemember.get(key) === promise) {
+        inFlightRemember.delete(key);
+      }
+    }
   };
 
   cache.rememberAsync = async <T>(key: string, factory: () => T | Promise<T>, rememberTtl?: number): Promise<T> => {
     const existing = await cache.getValueAsync<T>(key);
     if (existing !== undefined) return existing;
-    const value = await factory();
-    await cache.setAsync(key, value, rememberTtl);
-    return value;
+    const inFlight = inFlightRemember.get(key);
+    if (inFlight) return inFlight as Promise<T>;
+
+    const promise = (async () => {
+      const value = await factory();
+      await cache.setAsync(key, value, rememberTtl);
+      return value;
+    })();
+
+    inFlightRemember.set(key, promise);
+    try {
+      return await promise;
+    } finally {
+      if (inFlightRemember.get(key) === promise) {
+        inFlightRemember.delete(key);
+      }
+    }
   };
 
   cache.get            = (key: string) => store.get(key);
   cache.getAll         = () => store.getAll();
   cache.getAllAsync    = (batchOptions) => store.getAllAsync(batchOptions);
-  cache.delete         = (key: string) => store.delete(key);
-  cache.deleteMatching = (pattern: string) => store.deleteMatching(pattern);
-  cache.deleteMatchingAsync = (pattern, batchOptions) => store.deleteMatchingAsync(pattern, batchOptions);
-  cache.clear          = () => store.clear();
-  cache.clearAsync     = (batchOptions) => store.clearAsync(batchOptions);
+  cache.delete         = (key: string) => {
+    nextVersion(keyVersions, key);
+    return store.delete(key);
+  };
+  cache.deleteMatching = (pattern: string) => {
+    mutationEpoch++;
+    return store.deleteMatching(pattern);
+  };
+  cache.deleteMatchingAsync = (pattern, batchOptions) => {
+    mutationEpoch++;
+    return store.deleteMatchingAsync(pattern, batchOptions);
+  };
+  cache.clear          = () => {
+    mutationEpoch++;
+    keyVersions.clear();
+    store.clear();
+  };
+  cache.clearAsync     = async (batchOptions) => {
+    mutationEpoch++;
+    keyVersions.clear();
+    return store.clearAsync(batchOptions);
+  };
   cache.on             = store.on.bind(store) as Memorize['on'];
   cache.size           = () => store.size();
   cache.byteSize       = () => store.byteSize();
