@@ -228,13 +228,18 @@ export class MemorizeStore {
    */
   getAll(): Record<string, CacheInfo> {
     const result: Record<string, CacheInfo> = {};
+    let expired = false;
 
     for (const [key, entry] of this._store) {
       if (entry.expiresAt && Date.now() >= entry.expiresAt) {
-        this._evict(key, MemorizeEventType.Expire);
+        expired = this._evictExpiredEntry(key) || expired;
         continue;
       }
       result[key] = this._format(key, entry);
+    }
+
+    if (expired) {
+      this._scheduleNextExpiry();
     }
 
     return result;
@@ -251,10 +256,11 @@ export class MemorizeStore {
     const batchSize = normalizeBatchSize(options);
     const result: Record<string, CacheInfo> = {};
     let scanned = 0;
+    let expired = false;
 
     for (const [key, entry] of this._store) {
       if (entry.expiresAt && Date.now() >= entry.expiresAt) {
-        this._evict(key, MemorizeEventType.Expire);
+        expired = this._evictExpiredEntry(key) || expired;
       } else {
         result[key] = this._format(key, entry);
       }
@@ -263,6 +269,10 @@ export class MemorizeStore {
       if (scanned % batchSize === 0) {
         await yieldToEventLoop();
       }
+    }
+
+    if (expired) {
+      this._scheduleNextExpiry();
     }
 
     return result;
@@ -491,7 +501,6 @@ export class MemorizeStore {
       this._nextExpiryKey = null;
       this._nextExpiryAt = null;
       this._evictExpiredEntries();
-      this._scheduleNextExpiry();
     }, delay);
 
     if (typeof timer === 'object' && 'unref' in timer) timer.unref();
@@ -521,11 +530,29 @@ export class MemorizeStore {
 
   private _evictExpiredEntries(): void {
     const now = Date.now();
+    let expired = false;
+
     for (const [key, entry] of [...this._store]) {
       if (entry.expiresAt !== null && now >= entry.expiresAt) {
-        this._evict(key, MemorizeEventType.Expire);
+        expired = this._evictExpiredEntry(key) || expired;
       }
     }
+
+    if (expired) {
+      this._scheduleNextExpiry();
+    }
+  }
+
+  private _evictExpiredEntry(key: string): boolean {
+    const removed = this._removeStoredEntry(key);
+    if (!removed) return false;
+
+    this._emit(MemorizeEventType.Expire, { type: MemorizeEventType.Expire, key });
+    if (this._store.size === 0) {
+      this._emit(MemorizeEventType.Empty, { type: MemorizeEventType.Empty });
+    }
+
+    return true;
   }
 
   private _emit(event: MemorizeEventType, payload: MemorizeEvent): void {

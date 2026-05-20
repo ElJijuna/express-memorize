@@ -485,6 +485,25 @@ describe('MemorizeStore', () => {
       expect(all['/expired']).toBeUndefined();
       expect(all['/alive']).toBeDefined();
     });
+
+    it('reprograms once after lazy-expiring multiple entries in getAll', () => {
+      store.set('/expired-a', entry(), 500);
+      store.set('/expired-b', entry(), 500);
+      store.set('/alive', entry(), 5000);
+      const setTimeoutSpy = jest.spyOn(global, 'setTimeout');
+      const clearTimeoutSpy = jest.spyOn(global, 'clearTimeout');
+      jest.setSystemTime(Date.now() + 1000);
+
+      const all = store.getAll();
+
+      expect(all['/expired-a']).toBeUndefined();
+      expect(all['/expired-b']).toBeUndefined();
+      expect(all['/alive']).toBeDefined();
+      expect(setTimeoutSpy).toHaveBeenCalledTimes(1);
+      expect(clearTimeoutSpy).toHaveBeenCalledTimes(1);
+      setTimeoutSpy.mockRestore();
+      clearTimeoutSpy.mockRestore();
+    });
   });
 
   describe('size / byteSize / getStats', () => {
