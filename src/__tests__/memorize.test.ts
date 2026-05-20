@@ -547,6 +547,19 @@ describe('memorize middleware', () => {
       expect(cache.getValue('/c')).toBe('c');
     });
 
+    it('keeps a direct-cache entry recently used after getValue()', () => {
+      const cache = memorize({ maxEntries: 2 });
+      cache.set('/a', 'a');
+      cache.set('/b', 'b');
+      expect(cache.getValue('/a')).toBe('a');
+
+      cache.set('/c', 'c');
+
+      expect(cache.getValue('/a')).toBe('a');
+      expect(cache.getValue('/b')).toBeUndefined();
+      expect(cache.getValue('/c')).toBe('c');
+    });
+
     it('emits Evict event', () => {
       const cache = memorize({ maxEntries: 1 });
       const evicted: string[] = [];

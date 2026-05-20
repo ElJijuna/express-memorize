@@ -77,10 +77,10 @@ export function memorize(options: MemorizeOptions = {}): Memorize {
   };
 
   cache.getValue = <T>(key: string): T | undefined => {
-    const info = store.get(key);
-    if (!info) return undefined;
+    const entry = store.getRaw(key);
+    if (!entry) return undefined;
     try {
-      return serializer.deserialize(info.body as string | Buffer) as T;
+      return serializer.deserialize(entry.body as string | Buffer) as T;
     } catch {
       return undefined;
     }
