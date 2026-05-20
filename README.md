@@ -181,9 +181,53 @@ const cache = memorize({ ttl: 60_000 });
 // Compute-and-cache pattern
 const users = await cache.remember('users:list', () => usersService.findAll());
 
+// Per-call TTL
+const user = await cache.remember(
+  `users:${id}`,
+  () => usersService.findById(id),
+  10_000
+);
+
+// Concurrent calls for the same key share one in-flight factory
+const [featuredA, featuredB] = await Promise.all([
+  cache.remember('users:featured', () => usersService.findFeatured()),
+  cache.remember('users:featured', () => usersService.findFeatured()),
+]);
+
+// Async direct-cache variant: yields around serialization/deserialization
+const stats = await cache.rememberAsync(
+  'reports:daily-stats',
+  () => reportsService.dailyStats(),
+  30_000
+);
+
 // Explicit set/get
 cache.set('config', appConfig);
 const config = cache.getValue<AppConfig>('config');
+```
+
+Inside an Express route:
+
+```typescript
+import express from 'express';
+import { memorize } from 'express-memorize';
+
+const app = express();
+const cache = memorize({ ttl: 60_000 });
+
+app.get('/users/:id', async (req, res, next) => {
+  try {
+    const user = await cache.remember(
+      `users:${req.params.id}`,
+      () => usersService.findById(req.params.id),
+      10_000
+    );
+
+    res.json(user);
+  } catch (err) {
+    next(err);
+  }
+});
 ```
 
 ### Serializer
@@ -490,6 +534,15 @@ Returns an Express `RequestHandler`. `cache()` is a backwards-compatible alias f
 | `getValue` | `(key) => T \| undefined` | Retrieve a value stored via `set` or `remember`. |
 | `getValueAsync` | `(key) => Promise<T \| undefined>` | Async variant that yields before deserializing. |
 
+Concurrent `remember()` / `rememberAsync()` calls for the same key are
+coalesced: while one factory is in flight, later calls wait for the same
+promise instead of running the factory again.
+
+`setAsync()` guards against stale async writes. If another write or broad
+invalidation (`clear`, `clearAsync`, `deleteMatching`, `deleteMatchingAsync`)
+touches the cache before serialization finishes, the older async write is
+discarded instead of overwriting newer state.
+
 ### Cache management
 
 | Method | Signature | Description |
@@ -543,6 +596,7 @@ Returns an Express `RequestHandler`. `cache()` is a backwards-compatible alias f
 - All middleware and adapter instances created from the same `memorize()` call **share the same store**.
 - Two separate `memorize()` calls produce **independent stores**.
 - Byte size is an approximation — strings use UTF-8 encoding, objects use `JSON.stringify` length.
+- Async batched inspection/invalidation methods are eventually consistent, not transactional snapshots; other cache operations may interleave between batches.
 
 ## License
 
