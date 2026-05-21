@@ -11,6 +11,34 @@
 * add async serializer threshold and benchmarks ([c258d22](https://github.com/ElJijuna/express-memorize/commit/c258d2203f94615507c0b528d5700052b7fc2cc1))
 * avoid full key snapshot in clearAsync ([6c16053](https://github.com/ElJijuna/express-memorize/commit/6c16053d0f87ff275629e851c97c81a39b07d093))
 
+# [2.4.0](https://github.com/ElJijuna/express-memorize/compare/v2.3.1...v2.4.0) (2026-05-20)
+
+
+### Bug Fixes
+
+* guard async cache writes and coalesce remember calls ([24bf853](https://github.com/ElJijuna/express-memorize/commit/24bf853eb26ff55652e0bbf5a55b130d448ed2d7))
+
+
+### Features
+
+* add async direct cache APIs with cooperative yielding ([0f8e99d](https://github.com/ElJijuna/express-memorize/commit/0f8e99d1f20d933196ccdd2726c8e607b606e40e))
+* add batched cache operations and byte-size limits ([8ec1000](https://github.com/ElJijuna/express-memorize/commit/8ec1000ccb409cfc71c5857d541ebda829af8449))
+* add worker-backed async serialization ([1dd1883](https://github.com/ElJijuna/express-memorize/commit/1dd18838c9643989d99c753a07b1d77ae8b25f68))
+
+
+### Performance Improvements
+
+* batch lazy ttl expiry cleanup ([92e6d68](https://github.com/ElJijuna/express-memorize/commit/92e6d682352693fd14c703cd9a878cb74bb3ea06))
+* optimize ttl scheduler reprogramming ([c51aadc](https://github.com/ElJijuna/express-memorize/commit/c51aadc0c39afda7fe1cfe69fd4794e31b0d91fc))
+* replace per-entry ttl timers with shared scheduler ([df9f9d4](https://github.com/ElJijuna/express-memorize/commit/df9f9d4baf937270d855f0ba1fc71367bdd5c5cc))
+
+## [2.3.1](https://github.com/ElJijuna/express-memorize/compare/v2.3.0...v2.3.1) (2026-05-20)
+
+
+### Bug Fixes
+
+* update LRU order on direct cache reads ([885867d](https://github.com/ElJijuna/express-memorize/commit/885867d0cb8e15b9236fd6f0a0c32ef5bfaae667))
+
 # [2.3.0](https://github.com/ElJijuna/express-memorize/compare/v2.2.0...v2.3.0) (2026-05-18)
 
 
