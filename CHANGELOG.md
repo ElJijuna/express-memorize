@@ -1,3 +1,10 @@
+## [2.3.1](https://github.com/ElJijuna/express-memorize/compare/v2.3.0...v2.3.1) (2026-05-20)
+
+
+### Bug Fixes
+
+* update LRU order on direct cache reads ([885867d](https://github.com/ElJijuna/express-memorize/commit/885867d0cb8e15b9236fd6f0a0c32ef5bfaae667))
+
 # [2.3.0](https://github.com/ElJijuna/express-memorize/compare/v2.2.0...v2.3.0) (2026-05-18)
 
 
