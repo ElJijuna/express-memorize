@@ -1,3 +1,16 @@
+# [2.5.0](https://github.com/ElJijuna/express-memorize/compare/v2.4.0...v2.5.0) (2026-05-20)
+
+
+### Features
+
+* add lazy worker pool for async serialization ([53026f7](https://github.com/ElJijuna/express-memorize/commit/53026f7351abb81877440d63fa8088d985c01d99))
+
+
+### Performance Improvements
+
+* add async serializer threshold and benchmarks ([c258d22](https://github.com/ElJijuna/express-memorize/commit/c258d2203f94615507c0b528d5700052b7fc2cc1))
+* avoid full key snapshot in clearAsync ([6c16053](https://github.com/ElJijuna/express-memorize/commit/6c16053d0f87ff275629e851c97c81a39b07d093))
+
 # [2.4.0](https://github.com/ElJijuna/express-memorize/compare/v2.3.1...v2.4.0) (2026-05-20)
 
 
