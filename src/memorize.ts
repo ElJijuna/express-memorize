@@ -13,6 +13,26 @@ function serializedByteSize(body: string | Buffer): number {
   return Buffer.isBuffer(body) ? body.byteLength : Buffer.byteLength(body);
 }
 
+function estimateAsyncInputSize(value: unknown): number {
+  if (typeof value === 'string') return Buffer.byteLength(value);
+  if (Buffer.isBuffer(value)) return value.byteLength;
+  if (value instanceof ArrayBuffer) return value.byteLength;
+  if (ArrayBuffer.isView(value)) return (value as ArrayBufferView).byteLength;
+  try {
+    return Buffer.byteLength(JSON.stringify(value) ?? '');
+  } catch {
+    return Number.POSITIVE_INFINITY;
+  }
+}
+
+function normalizeAsyncSerializerThreshold(value: number | undefined): number {
+  if (value === undefined) return 64_000;
+  if (!Number.isFinite(value) || value < 0) {
+    throw new RangeError('asyncSerializerThresholdBytes must be greater than or equal to 0');
+  }
+  return value;
+}
+
 function yieldToEventLoop(): Promise<void> {
   return new Promise((resolve) => setImmediate(resolve));
 }
@@ -81,13 +101,16 @@ export function memorize(options: MemorizeOptions = {}): Memorize {
     maxTotalBytes,
     sizeLimitAction,
     asyncSerializer: asyncSerializerMode = 'yield',
+    asyncSerializerWorkers,
+    asyncSerializerThresholdBytes,
     serializer: serializerOption,
   } = options;
   const store = new MemorizeStore({ maxEntries, maxValueBytes, maxTotalBytes, sizeLimitAction });
   const serializer = createSerializer(serializerOption);
   const workerSerializer = asyncSerializerMode === 'worker'
-    ? createWorkerAsyncSerializer(serializerOption)
+    ? createWorkerAsyncSerializer(serializerOption, asyncSerializerWorkers)
     : null;
+  const workerThresholdBytes = normalizeAsyncSerializerThreshold(asyncSerializerThresholdBytes);
   const expressMiddleware = createExpressMiddleware(store, ttl);
   const keyVersions = new Map<string, number>();
   const inFlightRemember = new Map<string, Promise<unknown>>();
@@ -110,7 +133,7 @@ export function memorize(options: MemorizeOptions = {}): Memorize {
     const version = nextVersion(keyVersions, key);
     const epoch = mutationEpoch;
     await yieldToEventLoop();
-    if (!workerSerializer) {
+    if (!workerSerializer || estimateAsyncInputSize(value) < workerThresholdBytes) {
       if (keyVersions.get(key) !== version || mutationEpoch !== epoch) return;
       const body = serializer.serialize(value);
       if (keyVersions.get(key) !== version || mutationEpoch !== epoch) return;
@@ -141,6 +164,13 @@ export function memorize(options: MemorizeOptions = {}): Memorize {
 
     const entry = store.getRaw(key);
     if (!entry) return undefined;
+    if (entry.size < workerThresholdBytes) {
+      try {
+        return serializer.deserialize(entry.body as string | Buffer) as T;
+      } catch {
+        return undefined;
+      }
+    }
     try {
       return await workerSerializer.deserialize(entry.body as string | Buffer) as T;
     } catch {

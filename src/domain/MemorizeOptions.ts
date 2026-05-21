@@ -70,6 +70,28 @@ export interface MemorizeOptions {
   asyncSerializer?: 'yield' | 'worker';
 
   /**
+   * Maximum number of lazy worker threads used by `asyncSerializer: 'worker'`.
+   *
+   * - `'auto'` — choose a conservative count from available CPU parallelism.
+   * - `number` — requested worker count, clamped to available parallelism and
+   *   an internal safety cap.
+   *
+   * @defaultValue 'auto'
+   */
+  asyncSerializerWorkers?: 'auto' | number;
+
+  /**
+   * Minimum estimated serialized byte size required before `setAsync` /
+   * `getValueAsync` offloads work to a worker.
+   *
+   * Smaller values use cooperative yielding on the main thread to avoid worker
+   * overhead. Only applies when `asyncSerializer: 'worker'`.
+   *
+   * @defaultValue 65536
+   */
+  asyncSerializerThresholdBytes?: number;
+
+  /**
    * Serializer used by {@link Memorize.set} and {@link Memorize.getValue}.
    *
    * - `'auto'` (default) — uses `node:v8` when available, falls back to JSON silently.
