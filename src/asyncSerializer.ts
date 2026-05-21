@@ -1,8 +1,10 @@
 import type { SerializerOption } from './serializer';
 
+type BuiltInSerializerOption = 'json' | 'v8' | 'auto';
+
 type AsyncSerializerRequest =
-  | { id: number; action: 'serialize'; serializer: 'json' | 'v8' | 'auto'; value: unknown }
-  | { id: number; action: 'deserialize'; serializer: 'json' | 'v8' | 'auto'; data: string | Buffer };
+  | { id: number; action: 'serialize'; serializer: BuiltInSerializerOption; value: unknown }
+  | { id: number; action: 'deserialize'; serializer: BuiltInSerializerOption; data: string | Buffer };
 
 type AsyncSerializerResponse =
   | { id: number; result: unknown }
@@ -18,6 +20,12 @@ interface WorkerLike {
 
 interface WorkerConstructor {
   new (filename: string, options: { eval: true }): WorkerLike;
+}
+
+interface WorkerSlot {
+  worker: WorkerLike;
+  pending: Map<number, PendingRequest>;
+  idleTimer: ReturnType<typeof setTimeout> | null;
 }
 
 interface PendingRequest {
@@ -69,6 +77,28 @@ function isWorkerSerializer(option: SerializerOption | undefined): option is 'js
   return option === undefined || option === 'json' || option === 'v8' || option === 'auto';
 }
 
+function getAvailableParallelism(): number {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const os = require('node:os') as typeof import('node:os');
+    return os.availableParallelism?.() ?? os.cpus().length;
+  } catch {
+    return 1;
+  }
+}
+
+function normalizeWorkerCount(workers: number | 'auto' | undefined): number {
+  const available = Math.max(1, getAvailableParallelism());
+  const auto = Math.max(1, Math.min(4, available - 1 || 1));
+  const requested = workers === undefined || workers === 'auto' ? auto : workers;
+
+  if (!Number.isInteger(requested) || requested <= 0) {
+    throw new RangeError('asyncSerializerWorkers must be a positive integer or "auto"');
+  }
+
+  return Math.max(1, Math.min(requested, available, 8));
+}
+
 function normalizeWorkerResult(result: unknown): string | Buffer {
   if (typeof result === 'string') return result;
   if (Buffer.isBuffer(result)) return result;
@@ -77,12 +107,17 @@ function normalizeWorkerResult(result: unknown): string | Buffer {
 }
 
 export class WorkerAsyncSerializer {
-  private _worker: WorkerLike | null = null;
-  private _idleTimer: ReturnType<typeof setTimeout> | null = null;
   private _nextId = 1;
-  private readonly _pending = new Map<number, PendingRequest>();
+  private readonly _slots: WorkerSlot[] = [];
+  private _WorkerCtor: WorkerConstructor | null | undefined;
+  readonly workerCount: number;
 
-  constructor(private readonly _serializer: 'json' | 'v8' | 'auto') {}
+  constructor(
+    private readonly _serializer: BuiltInSerializerOption,
+    workers?: number | 'auto'
+  ) {
+    this.workerCount = normalizeWorkerCount(workers);
+  }
 
   serialize(value: unknown): Promise<string | Buffer> {
     return this._request({ id: 0, action: 'serialize', serializer: this._serializer, value })
@@ -98,79 +133,112 @@ export class WorkerAsyncSerializer {
     const request = { ...message, id } as AsyncSerializerRequest;
 
     return new Promise((resolve, reject) => {
-      this._clearIdleTimer();
-      this._pending.set(id, { resolve, reject });
+      const slot = this._getSlot();
+      this._clearIdleTimer(slot);
+      slot.pending.set(id, { resolve, reject });
       try {
-        this._getWorker().postMessage(request);
+        slot.worker.postMessage(request);
       } catch (error) {
-        this._pending.delete(id);
+        slot.pending.delete(id);
         reject(error instanceof Error ? error : new Error(String(error)));
       }
     });
   }
 
-  private _getWorker(): WorkerLike {
-    if (this._worker) return this._worker;
+  private _getSlot(): WorkerSlot {
+    const available = this._slots.find((slot) => slot.pending.size === 0);
+    if (available) return available;
 
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { Worker } = require('node:worker_threads') as { Worker: WorkerConstructor };
-    const worker = new Worker(WORKER_SOURCE, { eval: true });
-    worker.unref?.();
-    worker.on('message', (message) => this._handleMessage(message));
-    worker.on('error', (error) => this._rejectAll(error));
-    this._worker = worker;
-    return worker;
+    if (this._slots.length < this.workerCount) {
+      return this._createSlot();
+    }
+
+    return this._slots.reduce((best, slot) => slot.pending.size < best.pending.size ? slot : best);
   }
 
-  private _handleMessage(message: AsyncSerializerResponse): void {
-    const pending = this._pending.get(message.id);
+  private _createSlot(): WorkerSlot {
+    const worker = new (this._getWorkerConstructor())(WORKER_SOURCE, { eval: true });
+    worker.unref?.();
+    const slot: WorkerSlot = { worker, pending: new Map(), idleTimer: null };
+    worker.on('message', (message) => this._handleMessage(slot, message));
+    worker.on('error', (error) => this._rejectAll(slot, error));
+    this._slots.push(slot);
+    return slot;
+  }
+
+  private _getWorkerConstructor(): WorkerConstructor {
+    if (this._WorkerCtor !== undefined) {
+      if (!this._WorkerCtor) throw new Error('node:worker_threads is not available');
+      return this._WorkerCtor;
+    }
+
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { Worker } = require('node:worker_threads') as { Worker: WorkerConstructor };
+      this._WorkerCtor = Worker;
+      return Worker;
+    } catch {
+      this._WorkerCtor = null;
+      throw new Error('node:worker_threads is not available');
+    }
+  }
+
+  private _handleMessage(slot: WorkerSlot, message: AsyncSerializerResponse): void {
+    const pending = slot.pending.get(message.id);
     if (!pending) return;
-    this._pending.delete(message.id);
+    slot.pending.delete(message.id);
 
     if ('error' in message) {
       const error = new Error(message.error.message ?? 'worker serializer failed');
       error.name = message.error.name ?? 'Error';
       pending.reject(error);
-      this._scheduleIdleShutdown();
+      this._scheduleIdleShutdown(slot);
       return;
     }
 
     pending.resolve(message.result);
-    this._scheduleIdleShutdown();
+    this._scheduleIdleShutdown(slot);
   }
 
-  private _rejectAll(error: Error): void {
-    this._clearIdleTimer();
-    for (const [id, pending] of this._pending) {
-      this._pending.delete(id);
+  private _rejectAll(slot: WorkerSlot, error: Error): void {
+    this._clearIdleTimer(slot);
+    for (const [id, pending] of slot.pending) {
+      slot.pending.delete(id);
       pending.reject(error);
     }
-    this._worker = null;
+    this._removeSlot(slot);
   }
 
-  private _scheduleIdleShutdown(): void {
-    if (this._pending.size > 0 || !this._worker) return;
+  private _scheduleIdleShutdown(slot: WorkerSlot): void {
+    if (slot.pending.size > 0) return;
 
-    this._idleTimer = setTimeout(() => {
-      const worker = this._worker;
-      this._worker = null;
-      this._idleTimer = null;
-      void worker?.terminate();
+    slot.idleTimer = setTimeout(() => {
+      this._removeSlot(slot);
+      void slot.worker.terminate();
     }, 50);
 
-    if (typeof this._idleTimer === 'object' && 'unref' in this._idleTimer) {
-      this._idleTimer.unref();
+    if (typeof slot.idleTimer === 'object' && 'unref' in slot.idleTimer) {
+      slot.idleTimer.unref();
     }
   }
 
-  private _clearIdleTimer(): void {
-    if (!this._idleTimer) return;
-    clearTimeout(this._idleTimer);
-    this._idleTimer = null;
+  private _clearIdleTimer(slot: WorkerSlot): void {
+    if (!slot.idleTimer) return;
+    clearTimeout(slot.idleTimer);
+    slot.idleTimer = null;
+  }
+
+  private _removeSlot(slot: WorkerSlot): void {
+    this._clearIdleTimer(slot);
+    const index = this._slots.indexOf(slot);
+    if (index !== -1) this._slots.splice(index, 1);
   }
 }
 
-export function createWorkerAsyncSerializer(option: SerializerOption | undefined): WorkerAsyncSerializer | null {
+export function createWorkerAsyncSerializer(
+  option: SerializerOption | undefined,
+  workers?: number | 'auto'
+): WorkerAsyncSerializer | null {
   if (!isWorkerSerializer(option)) return null;
-  return new WorkerAsyncSerializer(option ?? 'auto');
+  return new WorkerAsyncSerializer(option ?? 'auto', workers);
 }
