@@ -39,6 +39,43 @@
 - `X-Cache: HIT | MISS | BYPASS` response header
 - Zero runtime dependencies, fully typed
 
+## How it works
+
+```text
+GET request
+    |
+    v
++-------------------+
+| express-memorize  |
++-------------------+
+    |
+    +--> noCache or non-GET? ---- yes ----> handler ----> response
+    |
+    no
+    |
+    v
++-------------------+
+| cache lookup      |
++-------------------+
+    |
+    +--> HIT -----------------------------> cached response
+    |                                      X-Cache: HIT
+    |
+    +--> MISS / expired
+            |
+            v
+        handler
+            |
+            v
+        2xx response?
+            |
+            +--> yes --> store body + ttl + size --> response
+            |                                X-Cache: MISS
+            |
+            +--> no -----------------------> response
+                                             X-Cache: MISS
+```
+
 ## Installation
 
 ```bash
