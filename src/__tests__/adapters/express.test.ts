@@ -1,18 +1,26 @@
-import { Request, NextFunction } from 'express';
-import { memorize } from '../../memorize';
+import type { NextFunction, Request } from 'express';
 import { createExpressAdapter } from '../../adapters/express';
+import { memorize } from '../../memorize';
 
 function createMockReqRes(url = '/users', method = 'GET') {
   const responseHeaders: Record<string, string> = {};
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   const res: any = {
     statusCode: 200,
-    status(code: number) { this.statusCode = code; return this; },
-    setHeader(name: string, value: string) { responseHeaders[name] = value; return this; },
-    getHeader(name: string) { return responseHeaders[name]; },
+    status(code: number) {
+      this.statusCode = code;
+      return this;
+    },
+    setHeader(name: string, value: string) {
+      responseHeaders[name] = value;
+      return this;
+    },
+    getHeader(name: string) {
+      return responseHeaders[name];
+    },
     send: jest.fn().mockReturnThis(),
   };
-  res.json = function (body: unknown) {
+  res.json = (body: unknown) => {
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     return res.send(JSON.stringify(body));
   };

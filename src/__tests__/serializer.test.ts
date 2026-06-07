@@ -1,5 +1,5 @@
-import { createSerializer } from '../serializer';
 import type { Serializer } from '../serializer';
+import { createSerializer } from '../serializer';
 
 describe('createSerializer', () => {
   describe("'json'", () => {
@@ -103,7 +103,7 @@ describe('memorize() with serializer option', () => {
     const cache = memorize({ serializer: 'v8', ttl: Infinity });
     const date = new Date('2024-06-01');
     cache.set('date', date);
-    expect((cache.getValue<Date>('date'))?.getTime()).toBe(date.getTime());
+    expect(cache.getValue<Date>('date')?.getTime()).toBe(date.getTime());
   });
 
   it('auto: set/getValue round-trip', () => {

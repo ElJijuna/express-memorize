@@ -1,35 +1,35 @@
-import { globToRegex } from './utils/globToRegex';
-import { CacheEntry } from './domain/CacheEntry';
-import { CacheInfo } from './domain/CacheInfo';
-import { MemorizeStats } from './domain/MemorizeStats';
+import type { CacheEntry } from './domain/CacheEntry';
+import type { CacheInfo } from './domain/CacheInfo';
+import type { MemorizeBatchOptions } from './domain/MemorizeBatchOptions';
+import type { MemorizeDeleteEvent } from './domain/MemorizeDeleteEvent';
+import type { MemorizeEmptyEvent } from './domain/MemorizeEmptyEvent';
+import type { MemorizeEvent } from './domain/MemorizeEvent';
 import { MemorizeEventType } from './domain/MemorizeEventType';
-import { MemorizeEvent } from './domain/MemorizeEvent';
-import { MemorizeSetEvent } from './domain/MemorizeSetEvent';
-import { MemorizeDeleteEvent } from './domain/MemorizeDeleteEvent';
-import { MemorizeExpireEvent } from './domain/MemorizeExpireEvent';
-import { MemorizeEmptyEvent } from './domain/MemorizeEmptyEvent';
-import { MemorizeEvictEvent } from './domain/MemorizeEvictEvent';
-import { MemorizeBatchOptions } from './domain/MemorizeBatchOptions';
+import type { MemorizeEvictEvent } from './domain/MemorizeEvictEvent';
+import type { MemorizeExpireEvent } from './domain/MemorizeExpireEvent';
+import type { MemorizeSetEvent } from './domain/MemorizeSetEvent';
+import type { MemorizeStats } from './domain/MemorizeStats';
+import { globToRegex } from './utils/globToRegex';
 
 export type {
   CacheEntry,
   CacheInfo,
-  MemorizeStats,
-  MemorizeEvent,
-  MemorizeSetEvent,
   MemorizeDeleteEvent,
-  MemorizeExpireEvent,
   MemorizeEmptyEvent,
+  MemorizeEvent,
   MemorizeEvictEvent,
+  MemorizeExpireEvent,
+  MemorizeSetEvent,
+  MemorizeStats,
 };
 export { MemorizeEventType };
 
 type ListenerMap = {
-  [MemorizeEventType.Set]:    Array<(e: MemorizeSetEvent) => void>;
+  [MemorizeEventType.Set]: Array<(e: MemorizeSetEvent) => void>;
   [MemorizeEventType.Delete]: Array<(e: MemorizeDeleteEvent) => void>;
   [MemorizeEventType.Expire]: Array<(e: MemorizeExpireEvent) => void>;
-  [MemorizeEventType.Empty]:  Array<(e: MemorizeEmptyEvent) => void>;
-  [MemorizeEventType.Evict]:  Array<(e: MemorizeEvictEvent) => void>;
+  [MemorizeEventType.Empty]: Array<(e: MemorizeEmptyEvent) => void>;
+  [MemorizeEventType.Evict]: Array<(e: MemorizeEvictEvent) => void>;
 };
 
 interface MemorizeStoreOptions {
@@ -47,10 +47,18 @@ const DEFAULT_TTL = 60_000;
 const DEFAULT_BATCH_SIZE = 1_000;
 
 function estimateByteSize(value: unknown): number {
-  if (typeof value === 'string') return Buffer.byteLength(value);
-  if (Buffer.isBuffer(value)) return value.byteLength;
-  if (value instanceof ArrayBuffer) return value.byteLength;
-  if (ArrayBuffer.isView(value)) return (value as ArrayBufferView).byteLength;
+  if (typeof value === 'string') {
+    return Buffer.byteLength(value);
+  }
+  if (Buffer.isBuffer(value)) {
+    return value.byteLength;
+  }
+  if (value instanceof ArrayBuffer) {
+    return value.byteLength;
+  }
+  if (ArrayBuffer.isView(value)) {
+    return (value as ArrayBufferView).byteLength;
+  }
   try {
     return Buffer.byteLength(JSON.stringify(value) ?? '');
   } catch {
@@ -65,7 +73,11 @@ function normalizeTtl(ttl?: number | null): { expiresAt: number | null } {
 
   const effectiveTtl = ttl ?? DEFAULT_TTL;
 
-  if (typeof effectiveTtl !== 'number' || Number.isNaN(effectiveTtl) || !Number.isFinite(effectiveTtl)) {
+  if (
+    typeof effectiveTtl !== 'number' ||
+    Number.isNaN(effectiveTtl) ||
+    !Number.isFinite(effectiveTtl)
+  ) {
     throw new TypeError('ttl must be a finite number or Infinity');
   }
 
@@ -87,7 +99,9 @@ function normalizeBatchSize(options?: MemorizeBatchOptions): number {
 }
 
 function normalizeByteLimit(name: string, value: number | undefined): number | undefined {
-  if (value === undefined) return undefined;
+  if (value === undefined) {
+    return undefined;
+  }
 
   if (!Number.isFinite(value) || value < 0) {
     throw new RangeError(`${name} must be greater than or equal to 0`);
@@ -113,11 +127,11 @@ export class MemorizeStore {
   private _nextExpiryKey: string | null = null;
   private _totalByteSize = 0;
   private _listeners: ListenerMap = {
-    [MemorizeEventType.Set]:    [],
+    [MemorizeEventType.Set]: [],
     [MemorizeEventType.Delete]: [],
     [MemorizeEventType.Expire]: [],
-    [MemorizeEventType.Empty]:  [],
-    [MemorizeEventType.Evict]:  [],
+    [MemorizeEventType.Empty]: [],
+    [MemorizeEventType.Evict]: [],
   };
 
   private readonly _maxEntries?: number;
@@ -126,9 +140,10 @@ export class MemorizeStore {
   private readonly _sizeLimitAction: 'skip' | 'throw';
 
   constructor(maxEntriesOrOptions?: number | MemorizeStoreOptions) {
-    const options = typeof maxEntriesOrOptions === 'number'
-      ? { maxEntries: maxEntriesOrOptions }
-      : maxEntriesOrOptions ?? {};
+    const options =
+      typeof maxEntriesOrOptions === 'number'
+        ? { maxEntries: maxEntriesOrOptions }
+        : (maxEntriesOrOptions ?? {});
 
     this._maxEntries = options.maxEntries;
     this._maxValueBytes = normalizeByteLimit('maxValueBytes', options.maxValueBytes);
@@ -148,14 +163,14 @@ export class MemorizeStore {
    * store.on(MemorizeEventType.Evict, (e) => console.log('evicted', e.key));
    * ```
    */
-  on(event: MemorizeEventType.Set,    handler: (e: MemorizeSetEvent) => void): void;
+  on(event: MemorizeEventType.Set, handler: (e: MemorizeSetEvent) => void): void;
   on(event: MemorizeEventType.Delete, handler: (e: MemorizeDeleteEvent) => void): void;
   on(event: MemorizeEventType.Expire, handler: (e: MemorizeExpireEvent) => void): void;
-  on(event: MemorizeEventType.Empty,  handler: (e: MemorizeEmptyEvent) => void): void;
-  on(event: MemorizeEventType.Evict,  handler: (e: MemorizeEvictEvent) => void): void;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  on(event: MemorizeEventType, handler: (e: any) => void): void {
-    this._listeners[event].push(handler);
+  on(event: MemorizeEventType.Empty, handler: (e: MemorizeEmptyEvent) => void): void;
+  on(event: MemorizeEventType.Evict, handler: (e: MemorizeEvictEvent) => void): void;
+  on(event: MemorizeEventType, handler: (e: never) => void): void {
+    const listeners = this._listeners[event] as Array<(e: never) => void>;
+    listeners.push(handler);
   }
 
   /**
@@ -174,8 +189,12 @@ export class MemorizeStore {
     const size = entry.size ?? estimateByteSize(entry.body);
     const existing = this._store.get(key);
 
-    if (!this._canStoreSize(size, this._maxValueBytes, 'maxValueBytes')) return;
-    if (!this._canStoreSize(size, this._maxTotalBytes, 'maxTotalBytes')) return;
+    if (!this._canStoreSize(size, this._maxValueBytes, 'maxValueBytes')) {
+      return;
+    }
+    if (!this._canStoreSize(size, this._maxTotalBytes, 'maxTotalBytes')) {
+      return;
+    }
 
     const removed = existing ? this._removeStoredEntry(key) : null;
 
@@ -196,7 +215,13 @@ export class MemorizeStore {
     this._store.set(key, stored);
     this._totalByteSize += size;
 
-    this._emit(MemorizeEventType.Set, { type: MemorizeEventType.Set, key, ...entry, expiresAt, size });
+    this._emit(MemorizeEventType.Set, {
+      type: MemorizeEventType.Set,
+      key,
+      ...entry,
+      expiresAt,
+      size,
+    });
 
     if (removed && key === this._nextExpiryKey) {
       this._scheduleNextExpiry();
@@ -212,7 +237,9 @@ export class MemorizeStore {
    */
   get(key: string): CacheInfo | null {
     const entry = this._store.get(key);
-    if (!entry) return null;
+    if (!entry) {
+      return null;
+    }
 
     if (entry.expiresAt && Date.now() >= entry.expiresAt) {
       this._evict(key, MemorizeEventType.Expire);
@@ -285,7 +312,9 @@ export class MemorizeStore {
    * @returns `true` if the entry existed and was removed, `false` otherwise.
    */
   delete(key: string): boolean {
-    if (!this._store.has(key)) return false;
+    if (!this._store.has(key)) {
+      return false;
+    }
     this._evict(key, MemorizeEventType.Delete);
     return true;
   }
@@ -366,7 +395,9 @@ export class MemorizeStore {
 
     while (this._store.size > 0) {
       const keys = this._takeKeys(batchSize);
-      if (keys.length === 0) break;
+      if (keys.length === 0) {
+        break;
+      }
 
       for (const key of keys) {
         if (this._store.has(key)) {
@@ -435,7 +466,9 @@ export class MemorizeStore {
    */
   getRaw(key: string): CacheEntry | null {
     const entry = this._store.get(key);
-    if (!entry) return null;
+    if (!entry) {
+      return null;
+    }
 
     if (entry.expiresAt && Date.now() >= entry.expiresAt) {
       this._evict(key, MemorizeEventType.Expire);
@@ -458,7 +491,9 @@ export class MemorizeStore {
   }
 
   private _canStoreSize(size: number, limit: number | undefined, limitName: string): boolean {
-    if (limit === undefined || size <= limit) return true;
+    if (limit === undefined || size <= limit) {
+      return true;
+    }
 
     if (this._sizeLimitAction === 'throw') {
       throw new RangeError(`${limitName} exceeded`);
@@ -469,13 +504,18 @@ export class MemorizeStore {
 
   private _removeStoredEntry(key: string): CacheEntry | null {
     const entry = this._store.get(key);
-    if (!entry) return null;
+    if (!entry) {
+      return null;
+    }
     this._totalByteSize = Math.max(0, this._totalByteSize - entry.size);
     this._store.delete(key);
     return entry;
   }
 
-  private _evict(key: string, reason: MemorizeEventType.Delete | MemorizeEventType.Expire | MemorizeEventType.Evict): void {
+  private _evict(
+    key: string,
+    reason: MemorizeEventType.Delete | MemorizeEventType.Expire | MemorizeEventType.Evict,
+  ): void {
     const removed = this._removeStoredEntry(key);
     this._emit(reason, { type: reason, key });
     if (removed && this._store.size === 0) {
@@ -498,19 +538,27 @@ export class MemorizeStore {
   }
 
   private _scheduleExpiryFor(key: string, expiresAt: number | null): void {
-    if (expiresAt === null) return;
-    if (this._nextExpiryAt !== null && expiresAt >= this._nextExpiryAt) return;
+    if (expiresAt === null) {
+      return;
+    }
+    if (this._nextExpiryAt !== null && expiresAt >= this._nextExpiryAt) {
+      return;
+    }
     this._scheduleExpiryAt(key, expiresAt);
   }
 
   private _scheduleExpiryAt(nextExpiryKey: string | null, nextExpiryAt: number | null): void {
-    if (nextExpiryKey === this._nextExpiryKey && nextExpiryAt === this._nextExpiryAt) return;
+    if (nextExpiryKey === this._nextExpiryKey && nextExpiryAt === this._nextExpiryAt) {
+      return;
+    }
 
     this._clearExpiryTimer();
     this._nextExpiryKey = nextExpiryKey;
     this._nextExpiryAt = nextExpiryAt;
 
-    if (nextExpiryAt === null) return;
+    if (nextExpiryAt === null) {
+      return;
+    }
 
     const delay = Math.max(0, nextExpiryAt - Date.now());
     const timer = setTimeout(() => {
@@ -520,12 +568,16 @@ export class MemorizeStore {
       this._evictExpiredEntries();
     }, delay);
 
-    if (typeof timer === 'object' && 'unref' in timer) timer.unref();
+    if (typeof timer === 'object' && 'unref' in timer) {
+      timer.unref();
+    }
     this._expiryTimer = timer;
   }
 
   private _clearExpiryTimer(): void {
-    if (!this._expiryTimer) return;
+    if (!this._expiryTimer) {
+      return;
+    }
     clearTimeout(this._expiryTimer);
     this._expiryTimer = null;
   }
@@ -535,14 +587,18 @@ export class MemorizeStore {
     let nextExpiryAt: number | null = null;
 
     for (const [key, entry] of this._store) {
-      if (entry.expiresAt === null) continue;
+      if (entry.expiresAt === null) {
+        continue;
+      }
       if (nextExpiryAt === null || entry.expiresAt < nextExpiryAt) {
         nextKey = key;
         nextExpiryAt = entry.expiresAt;
       }
     }
 
-    return nextKey === null || nextExpiryAt === null ? null : { key: nextKey, expiresAt: nextExpiryAt };
+    return nextKey === null || nextExpiryAt === null
+      ? null
+      : { key: nextKey, expiresAt: nextExpiryAt };
   }
 
   private _evictExpiredEntries(): void {
@@ -562,7 +618,9 @@ export class MemorizeStore {
 
   private _evictExpiredEntry(key: string): boolean {
     const removed = this._removeStoredEntry(key);
-    if (!removed) return false;
+    if (!removed) {
+      return false;
+    }
 
     this._emit(MemorizeEventType.Expire, { type: MemorizeEventType.Expire, key });
     if (this._store.size === 0) {

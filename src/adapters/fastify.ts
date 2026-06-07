@@ -57,7 +57,11 @@ export function createFastifyPlugin(
   cache: Memorize,
   options?: FastifyAdapterOptions,
 ): FastifyPluginCallback {
-  const plugin: FastifyPluginCallback = function memorizeFastifyPlugin(fastify, _pluginOptions, done) {
+  const plugin: FastifyPluginCallback = function memorizeFastifyPlugin(
+    fastify,
+    _pluginOptions,
+    done,
+  ) {
     fastify.addHook('preHandler', createFastifyPreHandler(cache, options));
     done();
   };

@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
-import { memorize } from '../../memorize';
 import { createHonoMiddleware } from '../../adapters/hono';
+import { memorize } from '../../memorize';
 
 function buildApp(cache = memorize(), options?: Parameters<typeof createHonoMiddleware>[1]) {
   const app = new Hono();

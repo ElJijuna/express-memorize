@@ -1,11 +1,10 @@
-import { Request, NextFunction } from 'express';
-import { memorize } from '../memorize';
+import type { NextFunction, Request } from 'express';
 import { MemorizeEventType } from '../domain/MemorizeEventType';
+import { memorize } from '../memorize';
 
 function createMockReqRes(url = '/test', method = 'GET') {
   const responseHeaders: Record<string, string> = {};
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const res: any = {
     statusCode: 200,
     status(code: number) {
@@ -23,7 +22,7 @@ function createMockReqRes(url = '/test', method = 'GET') {
   };
 
   // Simulate Express's res.json: sets Content-Type then calls res.send
-  (res as any).json = function (body: unknown) {
+  (res as any).json = (body: unknown) => {
     (res as any).setHeader('Content-Type', 'application/json; charset=utf-8');
     return (res as any).send(JSON.stringify(body));
   };
@@ -50,24 +49,21 @@ describe('memorize middleware', () => {
       expect(responseHeaders['X-Cache']).toBe('MISS');
     });
 
-    it.each(['POST', 'PUT', 'PATCH', 'DELETE'])(
-      'bypasses cache for %s requests',
-      (method) => {
-        const cache = memorize();
-        const middleware = cache();
+    it.each(['POST', 'PUT', 'PATCH', 'DELETE'])('bypasses cache for %s requests', (method) => {
+      const cache = memorize();
+      const middleware = cache();
 
-        // Prime the cache with a GET
-        const { req: getReq, res: getRes, next: getNext } = createMockReqRes('/users', 'GET');
-        middleware(getReq, getRes, getNext);
-        (getRes as any).json({ data: [] });
+      // Prime the cache with a GET
+      const { req: getReq, res: getRes, next: getNext } = createMockReqRes('/users', 'GET');
+      middleware(getReq, getRes, getNext);
+      (getRes as any).json({ data: [] });
 
-        // Non-GET to same URL: must call next and not return cached response
-        const { req, res, next } = createMockReqRes('/users', method);
-        middleware(req, res, next);
-        expect(next).toHaveBeenCalledTimes(1);
-        expect(res.send).not.toHaveBeenCalled();
-      }
-    );
+      // Non-GET to same URL: must call next and not return cached response
+      const { req, res, next } = createMockReqRes('/users', method);
+      middleware(req, res, next);
+      expect(next).toHaveBeenCalledTimes(1);
+      expect(res.send).not.toHaveBeenCalled();
+    });
 
     it('does not cache non-2xx responses', () => {
       const cache = memorize();
@@ -93,7 +89,12 @@ describe('memorize middleware', () => {
       middleware(req, res, next);
       (res as any).json({ created: true });
 
-      const { req: req2, res: res2, next: next2, responseHeaders: h2 } = createMockReqRes('/resource');
+      const {
+        req: req2,
+        res: res2,
+        next: next2,
+        responseHeaders: h2,
+      } = createMockReqRes('/resource');
       middleware(req2, res2, next2);
 
       expect(next2).not.toHaveBeenCalled();
@@ -353,7 +354,12 @@ describe('memorize middleware', () => {
       (res as any).json({ via: 'm1' });
 
       // Hit via m2
-      const { req: req2, res: res2, next: next2, responseHeaders: h2 } = createMockReqRes('/shared');
+      const {
+        req: req2,
+        res: res2,
+        next: next2,
+        responseHeaders: h2,
+      } = createMockReqRes('/shared');
       m2(req2, res2, next2);
 
       expect(next2).not.toHaveBeenCalled();
@@ -484,7 +490,9 @@ describe('memorize middleware', () => {
       jest.useRealTimers();
       const cache = memorize();
       let yielded = false;
-      setImmediate(() => { yielded = true; });
+      setImmediate(() => {
+        yielded = true;
+      });
 
       const promise = cache.setAsync('async-key', { ok: true });
       expect(cache.getValue('async-key')).toBeUndefined();
@@ -500,7 +508,9 @@ describe('memorize middleware', () => {
       const cache = memorize();
       let yielded = false;
       cache.set('async-key', { ok: true });
-      setImmediate(() => { yielded = true; });
+      setImmediate(() => {
+        yielded = true;
+      });
 
       const value = await cache.getValueAsync('async-key');
 
@@ -554,11 +564,18 @@ describe('memorize middleware', () => {
     });
 
     it('setAsync/getValueAsync can offload JSON serialization to a worker', async () => {
-      const cache = memorize({ serializer: 'json', asyncSerializer: 'worker', asyncSerializerThresholdBytes: 0 });
+      const cache = memorize({
+        serializer: 'json',
+        asyncSerializer: 'worker',
+        asyncSerializerThresholdBytes: 0,
+      });
 
       await cache.setAsync('worker-key', { ok: true, items: [1, 2, 3] });
 
-      await expect(cache.getValueAsync('worker-key')).resolves.toEqual({ ok: true, items: [1, 2, 3] });
+      await expect(cache.getValueAsync('worker-key')).resolves.toEqual({
+        ok: true,
+        items: [1, 2, 3],
+      });
     });
 
     it('clamps an oversized asyncSerializerWorkers request and still works', async () => {
@@ -591,23 +608,31 @@ describe('memorize middleware', () => {
     });
 
     it('rejects invalid asyncSerializerWorkers values', () => {
-      expect(() => memorize({
-        serializer: 'json',
-        asyncSerializer: 'worker',
-        asyncSerializerWorkers: 0,
-      })).toThrow(RangeError);
+      expect(() =>
+        memorize({
+          serializer: 'json',
+          asyncSerializer: 'worker',
+          asyncSerializerWorkers: 0,
+        }),
+      ).toThrow(RangeError);
     });
 
     it('rejects invalid asyncSerializerThresholdBytes values', () => {
-      expect(() => memorize({
-        serializer: 'json',
-        asyncSerializer: 'worker',
-        asyncSerializerThresholdBytes: -1,
-      })).toThrow(RangeError);
+      expect(() =>
+        memorize({
+          serializer: 'json',
+          asyncSerializer: 'worker',
+          asyncSerializerThresholdBytes: -1,
+        }),
+      ).toThrow(RangeError);
     });
 
     it('setAsync/getValueAsync can offload v8 serialization to a worker', async () => {
-      const cache = memorize({ serializer: 'v8', asyncSerializer: 'worker', asyncSerializerThresholdBytes: 0 });
+      const cache = memorize({
+        serializer: 'v8',
+        asyncSerializer: 'worker',
+        asyncSerializerThresholdBytes: 0,
+      });
       const value = { createdAt: new Date('2026-01-01T00:00:00.000Z'), tags: new Set(['a', 'b']) };
 
       await cache.setAsync('worker-key', value);
@@ -736,7 +761,11 @@ describe('memorize middleware', () => {
     });
 
     it('rememberAsync works with worker serialization', async () => {
-      const cache = memorize({ serializer: 'json', asyncSerializer: 'worker', asyncSerializerThresholdBytes: 0 });
+      const cache = memorize({
+        serializer: 'json',
+        asyncSerializer: 'worker',
+        asyncSerializerThresholdBytes: 0,
+      });
       const factory = jest.fn().mockResolvedValue({ data: ['worker'] });
 
       const first = await cache.rememberAsync('worker-list', factory);

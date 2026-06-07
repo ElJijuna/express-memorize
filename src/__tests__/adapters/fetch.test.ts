@@ -1,8 +1,7 @@
-import { memorize } from '../../memorize';
 import { cacheFetchHandler } from '../../adapters/fetch';
+import { memorize } from '../../memorize';
 
-const jsonHandler = async (_req: Request): Promise<Response> =>
-  Response.json({ data: [] });
+const jsonHandler = async (_req: Request): Promise<Response> => Response.json({ data: [] });
 
 const textHandler = async (_req: Request): Promise<Response> =>
   new Response('pong', { status: 200, headers: { 'Content-Type': 'text/plain' } });

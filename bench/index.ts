@@ -1,7 +1,7 @@
-import { runSerializerBench } from './serializer';
-import { runCacheBench } from './cache';
 import { runAsyncCacheBench } from './async-cache';
+import { runCacheBench } from './cache';
 import { runEventLoopBench } from './eventloop';
+import { runSerializerBench } from './serializer';
 
 async function main() {
   console.log('express-memorize benchmark suite\n');
@@ -11,4 +11,7 @@ async function main() {
   await runEventLoopBench();
 }
 
-main().catch((err) => { console.error(err); process.exit(1); });
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

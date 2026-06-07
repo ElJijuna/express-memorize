@@ -1,4 +1,4 @@
-import type { Context, Next, MiddlewareHandler } from 'hono';
+import type { Context, MiddlewareHandler, Next } from 'hono';
 import type { Memorize } from '../domain/Memorize';
 
 export interface HonoCallOptions {
@@ -32,7 +32,10 @@ export interface HonoCallOptions {
  * });
  * ```
  */
-export function createHonoMiddleware(cache: Memorize, options?: HonoCallOptions): MiddlewareHandler {
+export function createHonoMiddleware(
+  cache: Memorize,
+  options?: HonoCallOptions,
+): MiddlewareHandler {
   return async (c: Context, next: Next) => {
     if (c.req.method !== 'GET') {
       return next();

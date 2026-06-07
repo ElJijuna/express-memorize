@@ -1,4 +1,4 @@
-import { MemorizeEventType } from './MemorizeEventType';
+import type { MemorizeEventType } from './MemorizeEventType';
 
 /**
  * Emitted when a new response is stored in the cache.
