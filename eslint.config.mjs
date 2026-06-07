@@ -8,6 +8,12 @@ export default [
   ...eslintTs,
   ...eslintJest,
   {
+    files: ['*.cjs'],
+    rules: {
+      '@typescript-eslint/no-require-imports': 'off',
+    },
+  },
+  {
     files: ['src/__tests__/**/*.ts'],
     rules: {
       '@typescript-eslint/no-explicit-any': 'off',
