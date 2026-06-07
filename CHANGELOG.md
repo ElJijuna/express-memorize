@@ -1,3 +1,10 @@
+## [2.5.1](https://github.com/ElJijuna/express-memorize/compare/v2.5.0...v2.5.1) (2026-06-07)
+
+
+### Bug Fixes
+
+* add super-configs lint and format setup ([827a279](https://github.com/ElJijuna/express-memorize/commit/827a279afbf778a85f24febcea35a1efd11517ec))
+
 # [2.5.0](https://github.com/ElJijuna/express-memorize/compare/v2.4.0...v2.5.0) (2026-05-20)
 
 
