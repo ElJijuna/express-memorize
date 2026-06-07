@@ -1,6 +1,6 @@
-import { memorize } from '../memorize';
 import type { Memorize } from '../domain/Memorize';
 import type { MemorizeOptions } from '../domain/MemorizeOptions';
+import { memorize } from '../memorize';
 
 export const MEMORIZE_CACHE = Symbol('MEMORIZE_CACHE');
 export const MEMORIZE_MODULE_OPTIONS = Symbol('MEMORIZE_MODULE_OPTIONS');
@@ -30,7 +30,11 @@ export interface MemorizeNestCallHandler<T = unknown> {
 }
 
 export interface MemorizeNestObservable<T = unknown> {
-  subscribe(observerOrNext?: Partial<ObserverLike<T>> | ((value: T) => void), error?: (error: unknown) => void, complete?: () => void): unknown;
+  subscribe(
+    observerOrNext?: Partial<ObserverLike<T>> | ((value: T) => void),
+    error?: (error: unknown) => void,
+    complete?: () => void,
+  ): unknown;
 }
 
 interface ObserverLike<T = unknown> {
@@ -88,7 +92,9 @@ function setMetadata(key: string, value: unknown, target: MetadataTarget): void 
 
 function getOwnMetadata<T>(key: string, target: MetadataTarget): T | undefined {
   const reflect = Reflect as MetadataReflect;
-  const value = reflect.getMetadata ? reflect.getMetadata(key, target) : metadataFallback.get(target)?.get(key);
+  const value = reflect.getMetadata
+    ? reflect.getMetadata(key, target)
+    : metadataFallback.get(target)?.get(key);
   return value as T | undefined;
 }
 
@@ -97,15 +103,23 @@ function getMetadata<T>(key: string, context: MemorizeNestExecutionContext): T |
 }
 
 function createMetadataDecorator(key: string, value: unknown): MethodDecorator & ClassDecorator {
-  return (target: object, propertyKey?: string | symbol, descriptor?: PropertyDescriptor) => {
+  return (target: object, _propertyKey?: string | symbol, descriptor?: PropertyDescriptor) => {
     setMetadata(key, value, descriptor?.value ?? target);
   };
 }
 
-function setCacheHeader(response: MemorizeNestHttpResponse | undefined, value: 'HIT' | 'MISS' | 'BYPASS'): void {
-  if (!response || response.headersSent) return;
-  if (response.setHeader) response.setHeader('X-Cache', value);
-  else if (response.header) response.header('X-Cache', value);
+function setCacheHeader(
+  response: MemorizeNestHttpResponse | undefined,
+  value: 'HIT' | 'MISS' | 'BYPASS',
+): void {
+  if (!response || response.headersSent) {
+    return;
+  }
+  if (response.setHeader) {
+    response.setHeader('X-Cache', value);
+  } else if (response.header) {
+    response.header('X-Cache', value);
+  }
 }
 
 function defaultKey(request: MemorizeNestHttpRequest): string {
@@ -113,7 +127,9 @@ function defaultKey(request: MemorizeNestHttpRequest): string {
 }
 
 function parseCachedBody(body: unknown): unknown {
-  if (typeof body !== 'string') return body;
+  if (typeof body !== 'string') {
+    return body;
+  }
   try {
     return JSON.parse(body);
   } catch {
@@ -123,7 +139,11 @@ function parseCachedBody(body: unknown): unknown {
 
 function toObservable<T>(value: T): MemorizeNestObservable<T> {
   return {
-    subscribe(observerOrNext?: Partial<ObserverLike<T>> | ((value: T) => void), _error?: (error: unknown) => void, complete?: () => void) {
+    subscribe(
+      observerOrNext?: Partial<ObserverLike<T>> | ((value: T) => void),
+      _error?: (error: unknown) => void,
+      complete?: () => void,
+    ) {
       if (typeof observerOrNext === 'function') {
         observerOrNext(value);
         complete?.();
@@ -153,7 +173,11 @@ function cacheObservable<T>(
   onCompleteValue: (value: T) => void,
 ): MemorizeNestObservable<T> {
   return {
-    subscribe(observerOrNext?: Partial<ObserverLike<T>> | ((value: T) => void), error?: (error: unknown) => void, complete?: () => void) {
+    subscribe(
+      observerOrNext?: Partial<ObserverLike<T>> | ((value: T) => void),
+      error?: (error: unknown) => void,
+      complete?: () => void,
+    ) {
       const observer = normalizeObserver(observerOrNext, error, complete);
       let hasValue = false;
       let latestValue: T;
@@ -168,7 +192,9 @@ function cacheObservable<T>(
           observer.error?.(err);
         },
         complete() {
-          if (hasValue) onCompleteValue(latestValue);
+          if (hasValue) {
+            onCompleteValue(latestValue);
+          }
           observer.complete?.();
         },
       });
@@ -209,7 +235,10 @@ export class MemorizeInterceptor {
     private readonly options: MemorizeNestOptions = {},
   ) {}
 
-  intercept(context: MemorizeNestExecutionContext, next: MemorizeNestCallHandler): MemorizeNestObservable<unknown> {
+  intercept(
+    context: MemorizeNestExecutionContext,
+    next: MemorizeNestCallHandler,
+  ): MemorizeNestObservable<unknown> {
     const http = context.switchToHttp();
     const request = http.getRequest();
     const response = http.getResponse();
@@ -236,8 +265,14 @@ export class MemorizeInterceptor {
 
     setCacheHeader(response, 'MISS');
     return cacheObservable(next.handle(), (value) => {
-      if (value === undefined || response.headersSent) return;
-      this.cache._store.set(key, { body: value, statusCode: 200, contentType: 'application/json' }, ttl ?? this.cache._ttl);
+      if (value === undefined || response.headersSent) {
+        return;
+      }
+      this.cache._store.set(
+        key,
+        { body: value, statusCode: 200, contentType: 'application/json' },
+        ttl ?? this.cache._ttl,
+      );
     });
   }
 }

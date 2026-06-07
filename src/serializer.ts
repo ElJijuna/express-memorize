@@ -6,7 +6,7 @@ export interface Serializer {
 export type SerializerOption = 'json' | 'v8' | 'auto' | Serializer;
 
 const jsonSerializer: Serializer = {
-  serialize:   (v) => JSON.stringify(v),
+  serialize: (v) => JSON.stringify(v),
   deserialize: (d) => JSON.parse(d as string),
 };
 
@@ -25,11 +25,17 @@ function tryV8(): Serializer | null {
 }
 
 export function createSerializer(option: SerializerOption = 'auto'): Serializer {
-  if (typeof option === 'object') return option;
-  if (option === 'json') return jsonSerializer;
+  if (typeof option === 'object') {
+    return option;
+  }
+  if (option === 'json') {
+    return jsonSerializer;
+  }
   if (option === 'v8') {
     const s = tryV8();
-    if (!s) throw new Error('[express-memorize] node:v8 is not available in this runtime');
+    if (!s) {
+      throw new Error('[express-memorize] node:v8 is not available in this runtime');
+    }
     return s;
   }
   // 'auto': v8 si está disponible, JSON como fallback

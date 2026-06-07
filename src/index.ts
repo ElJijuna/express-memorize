@@ -1,14 +1,14 @@
-export { memorize } from './memorize';
-export type { Memorize, MemorizeOptions, MemorizeCallOptions } from './memorize';
-export { MemorizeEventType } from './domain/MemorizeEventType';
 export type {
   CacheEntry,
   CacheInfo,
-  MemorizeEvent,
-  MemorizeSetEvent,
   MemorizeDeleteEvent,
-  MemorizeExpireEvent,
   MemorizeEmptyEvent,
+  MemorizeEvent,
   MemorizeEvictEvent,
+  MemorizeExpireEvent,
+  MemorizeSetEvent,
   MemorizeStats,
 } from './domain/index';
+export { MemorizeEventType } from './domain/MemorizeEventType';
+export type { Memorize, MemorizeCallOptions, MemorizeOptions } from './memorize';
+export { memorize } from './memorize';

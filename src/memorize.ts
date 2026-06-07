@@ -1,23 +1,32 @@
-import { MemorizeStore } from './MemorizeStore';
-import { Memorize } from './domain/Memorize';
-import { MemorizeOptions } from './domain/MemorizeOptions';
-import { MemorizeCallOptions } from './domain/MemorizeCallOptions';
 import { createExpressMiddleware } from './adapters/express';
-import { createSerializer } from './serializer';
 import { createWorkerAsyncSerializer } from './asyncSerializer';
+import type { Memorize } from './domain/Memorize';
+import type { MemorizeCallOptions } from './domain/MemorizeCallOptions';
+import type { MemorizeOptions } from './domain/MemorizeOptions';
+import { MemorizeStore } from './MemorizeStore';
+import { createSerializer } from './serializer';
+
 export type { Serializer, SerializerOption } from './serializer';
 
-export type { Memorize, MemorizeOptions, MemorizeCallOptions };
+export type { Memorize, MemorizeCallOptions, MemorizeOptions };
 
 function serializedByteSize(body: string | Buffer): number {
   return Buffer.isBuffer(body) ? body.byteLength : Buffer.byteLength(body);
 }
 
 function estimateAsyncInputSize(value: unknown): number {
-  if (typeof value === 'string') return Buffer.byteLength(value);
-  if (Buffer.isBuffer(value)) return value.byteLength;
-  if (value instanceof ArrayBuffer) return value.byteLength;
-  if (ArrayBuffer.isView(value)) return (value as ArrayBufferView).byteLength;
+  if (typeof value === 'string') {
+    return Buffer.byteLength(value);
+  }
+  if (Buffer.isBuffer(value)) {
+    return value.byteLength;
+  }
+  if (value instanceof ArrayBuffer) {
+    return value.byteLength;
+  }
+  if (ArrayBuffer.isView(value)) {
+    return (value as ArrayBufferView).byteLength;
+  }
   try {
     return Buffer.byteLength(JSON.stringify(value) ?? '');
   } catch {
@@ -26,7 +35,9 @@ function estimateAsyncInputSize(value: unknown): number {
 }
 
 function normalizeAsyncSerializerThreshold(value: number | undefined): number {
-  if (value === undefined) return 64_000;
+  if (value === undefined) {
+    return 64_000;
+  }
   if (!Number.isFinite(value) || value < 0) {
     throw new RangeError('asyncSerializerThresholdBytes must be greater than or equal to 0');
   }
@@ -107,18 +118,17 @@ export function memorize(options: MemorizeOptions = {}): Memorize {
   } = options;
   const store = new MemorizeStore({ maxEntries, maxValueBytes, maxTotalBytes, sizeLimitAction });
   const serializer = createSerializer(serializerOption);
-  const workerSerializer = asyncSerializerMode === 'worker'
-    ? createWorkerAsyncSerializer(serializerOption, asyncSerializerWorkers)
-    : null;
+  const workerSerializer =
+    asyncSerializerMode === 'worker'
+      ? createWorkerAsyncSerializer(serializerOption, asyncSerializerWorkers)
+      : null;
   const workerThresholdBytes = normalizeAsyncSerializerThreshold(asyncSerializerThresholdBytes);
   const expressMiddleware = createExpressMiddleware(store, ttl);
   const keyVersions = new Map<string, number>();
   const inFlightRemember = new Map<string, Promise<unknown>>();
   let mutationEpoch = 0;
 
-  const cache = function (callOptions?: MemorizeCallOptions) {
-    return expressMiddleware(callOptions);
-  } as Memorize;
+  const cache = ((callOptions?: MemorizeCallOptions) => expressMiddleware(callOptions)) as Memorize;
 
   cache.express = (callOptions?: MemorizeCallOptions) => expressMiddleware(callOptions);
 
@@ -126,7 +136,11 @@ export function memorize(options: MemorizeOptions = {}): Memorize {
     nextVersion(keyVersions, key);
     const body = serializer.serialize(value);
     const contentType = Buffer.isBuffer(body) ? 'application/octet-stream' : 'application/json';
-    store.set(key, { body, statusCode: 200, contentType, size: serializedByteSize(body) }, entryTtl ?? ttl);
+    store.set(
+      key,
+      { body, statusCode: 200, contentType, size: serializedByteSize(body) },
+      entryTtl ?? ttl,
+    );
   };
 
   cache.setAsync = async <T>(key: string, value: T, entryTtl?: number): Promise<void> => {
@@ -134,23 +148,39 @@ export function memorize(options: MemorizeOptions = {}): Memorize {
     const epoch = mutationEpoch;
     await yieldToEventLoop();
     if (!workerSerializer || estimateAsyncInputSize(value) < workerThresholdBytes) {
-      if (keyVersions.get(key) !== version || mutationEpoch !== epoch) return;
+      if (keyVersions.get(key) !== version || mutationEpoch !== epoch) {
+        return;
+      }
       const body = serializer.serialize(value);
-      if (keyVersions.get(key) !== version || mutationEpoch !== epoch) return;
+      if (keyVersions.get(key) !== version || mutationEpoch !== epoch) {
+        return;
+      }
       const contentType = Buffer.isBuffer(body) ? 'application/octet-stream' : 'application/json';
-      store.set(key, { body, statusCode: 200, contentType, size: serializedByteSize(body) }, entryTtl ?? ttl);
+      store.set(
+        key,
+        { body, statusCode: 200, contentType, size: serializedByteSize(body) },
+        entryTtl ?? ttl,
+      );
       return;
     }
 
     const body = await workerSerializer.serialize(value);
-    if (keyVersions.get(key) !== version || mutationEpoch !== epoch) return;
+    if (keyVersions.get(key) !== version || mutationEpoch !== epoch) {
+      return;
+    }
     const contentType = Buffer.isBuffer(body) ? 'application/octet-stream' : 'application/json';
-    store.set(key, { body, statusCode: 200, contentType, size: serializedByteSize(body) }, entryTtl ?? ttl);
+    store.set(
+      key,
+      { body, statusCode: 200, contentType, size: serializedByteSize(body) },
+      entryTtl ?? ttl,
+    );
   };
 
   cache.getValue = <T>(key: string): T | undefined => {
     const entry = store.getRaw(key);
-    if (!entry) return undefined;
+    if (!entry) {
+      return undefined;
+    }
     try {
       return serializer.deserialize(entry.body as string | Buffer) as T;
     } catch {
@@ -160,10 +190,14 @@ export function memorize(options: MemorizeOptions = {}): Memorize {
 
   cache.getValueAsync = async <T>(key: string): Promise<T | undefined> => {
     await yieldToEventLoop();
-    if (!workerSerializer) return cache.getValue<T>(key);
+    if (!workerSerializer) {
+      return cache.getValue<T>(key);
+    }
 
     const entry = store.getRaw(key);
-    if (!entry) return undefined;
+    if (!entry) {
+      return undefined;
+    }
     if (entry.size < workerThresholdBytes) {
       try {
         return serializer.deserialize(entry.body as string | Buffer) as T;
@@ -172,17 +206,25 @@ export function memorize(options: MemorizeOptions = {}): Memorize {
       }
     }
     try {
-      return await workerSerializer.deserialize(entry.body as string | Buffer) as T;
+      return (await workerSerializer.deserialize(entry.body as string | Buffer)) as T;
     } catch {
       return undefined;
     }
   };
 
-  cache.remember = async <T>(key: string, factory: () => T | Promise<T>, rememberTtl?: number): Promise<T> => {
+  cache.remember = async <T>(
+    key: string,
+    factory: () => T | Promise<T>,
+    rememberTtl?: number,
+  ): Promise<T> => {
     const existing = cache.getValue<T>(key);
-    if (existing !== undefined) return existing;
+    if (existing !== undefined) {
+      return existing;
+    }
     const inFlight = inFlightRemember.get(key);
-    if (inFlight) return inFlight as Promise<T>;
+    if (inFlight) {
+      return inFlight as Promise<T>;
+    }
 
     const promise = (async () => {
       const value = await factory();
@@ -200,11 +242,19 @@ export function memorize(options: MemorizeOptions = {}): Memorize {
     }
   };
 
-  cache.rememberAsync = async <T>(key: string, factory: () => T | Promise<T>, rememberTtl?: number): Promise<T> => {
+  cache.rememberAsync = async <T>(
+    key: string,
+    factory: () => T | Promise<T>,
+    rememberTtl?: number,
+  ): Promise<T> => {
     const existing = await cache.getValueAsync<T>(key);
-    if (existing !== undefined) return existing;
+    if (existing !== undefined) {
+      return existing;
+    }
     const inFlight = inFlightRemember.get(key);
-    if (inFlight) return inFlight as Promise<T>;
+    if (inFlight) {
+      return inFlight as Promise<T>;
+    }
 
     const promise = (async () => {
       const value = await factory();
@@ -222,10 +272,10 @@ export function memorize(options: MemorizeOptions = {}): Memorize {
     }
   };
 
-  cache.get            = (key: string) => store.get(key);
-  cache.getAll         = () => store.getAll();
-  cache.getAllAsync    = (batchOptions) => store.getAllAsync(batchOptions);
-  cache.delete         = (key: string) => {
+  cache.get = (key: string) => store.get(key);
+  cache.getAll = () => store.getAll();
+  cache.getAllAsync = (batchOptions) => store.getAllAsync(batchOptions);
+  cache.delete = (key: string) => {
     nextVersion(keyVersions, key);
     return store.delete(key);
   };
@@ -237,22 +287,22 @@ export function memorize(options: MemorizeOptions = {}): Memorize {
     mutationEpoch++;
     return store.deleteMatchingAsync(pattern, batchOptions);
   };
-  cache.clear          = () => {
+  cache.clear = () => {
     mutationEpoch++;
     keyVersions.clear();
     store.clear();
   };
-  cache.clearAsync     = async (batchOptions) => {
+  cache.clearAsync = async (batchOptions) => {
     mutationEpoch++;
     keyVersions.clear();
     return store.clearAsync(batchOptions);
   };
-  cache.on             = store.on.bind(store) as Memorize['on'];
-  cache.size           = () => store.size();
-  cache.byteSize       = () => store.byteSize();
-  cache.getStats       = () => store.getStats();
-  cache._store         = store;
-  cache._ttl           = ttl;
+  cache.on = store.on.bind(store) as Memorize['on'];
+  cache.size = () => store.size();
+  cache.byteSize = () => store.byteSize();
+  cache.getStats = () => store.getStats();
+  cache._store = store;
+  cache._ttl = ttl;
 
   return cache;
 }

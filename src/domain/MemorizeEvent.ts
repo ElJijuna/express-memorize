@@ -1,8 +1,8 @@
-import { MemorizeSetEvent } from './MemorizeSetEvent';
-import { MemorizeDeleteEvent } from './MemorizeDeleteEvent';
-import { MemorizeExpireEvent } from './MemorizeExpireEvent';
-import { MemorizeEmptyEvent } from './MemorizeEmptyEvent';
-import { MemorizeEvictEvent } from './MemorizeEvictEvent';
+import type { MemorizeDeleteEvent } from './MemorizeDeleteEvent';
+import type { MemorizeEmptyEvent } from './MemorizeEmptyEvent';
+import type { MemorizeEvictEvent } from './MemorizeEvictEvent';
+import type { MemorizeExpireEvent } from './MemorizeExpireEvent';
+import type { MemorizeSetEvent } from './MemorizeSetEvent';
 
 /** Union of all possible cache events. */
 export type MemorizeEvent =

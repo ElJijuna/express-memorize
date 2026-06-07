@@ -1,5 +1,5 @@
 import express from 'express';
-import { memorize, MemorizeEventType } from '../../src';
+import { MemorizeEventType, memorize } from '../../src';
 
 const app = express();
 app.use(express.json());
@@ -7,7 +7,9 @@ app.use(express.json());
 const cache = memorize({ ttl: 30_000 }); // TTL global: 30s
 
 cache.on(MemorizeEventType.Set, (e) => {
-  console.log(`[cache:set]    ${e.key} — status ${e.statusCode} | ttl: ${e.expiresAt ? `${e.expiresAt - Date.now()}ms` : 'none'}`);
+  console.log(
+    `[cache:set]    ${e.key} — status ${e.statusCode} | ttl: ${e.expiresAt ? `${e.expiresAt - Date.now()}ms` : 'none'}`,
+  );
 });
 
 cache.on(MemorizeEventType.Delete, (e) => {
@@ -37,7 +39,7 @@ const products = [
 // --- Routes ---
 
 // Cached with global TTL (30s)
-app.get('/users', cache(), (req, res) => {
+app.get('/users', cache(), (_req, res) => {
   console.log('[handler] GET /users — computing response');
   res.json({ data: users });
 });
@@ -45,15 +47,19 @@ app.get('/users', cache(), (req, res) => {
 // Cached with global TTL (30s)
 app.get('/users/:id', cache(), (req, res) => {
   console.log('[handler] GET /users/:id — computing response');
-  const user = users.find((u) => u.id === parseInt(req.params.id));
-  if (!user) return res.status(404).json({ error: 'User not found' });
+  const user = users.find((u) => u.id === parseInt(req.params.id, 10));
+  if (!user) {
+    return res.status(404).json({ error: 'User not found' });
+  }
   res.json({ data: user });
 });
 
 app.delete('/users/:id', (req, res) => {
-  const id = parseInt(req.params.id);
+  const id = parseInt(req.params.id, 10);
   const index = users.findIndex((u) => u.id === id);
-  if (index === -1) return res.status(404).json({ error: 'User not found' });
+  if (index === -1) {
+    return res.status(404).json({ error: 'User not found' });
+  }
   users.splice(index, 1);
   cache.delete(`/users/${id}`);
   cache.delete('/users');
@@ -62,19 +68,19 @@ app.delete('/users/:id', (req, res) => {
 });
 
 // Cached with TTL override (10s)
-app.get('/products', cache({ ttl: 10_000 }), (req, res) => {
+app.get('/products', cache({ ttl: 10_000 }), (_req, res) => {
   console.log('[handler] GET /products — computing response');
   res.json({ data: products });
 });
 
 // Cached as plain text
-app.get('/ping', cache(), (req, res) => {
+app.get('/ping', cache(), (_req, res) => {
   console.log('[handler] GET /ping — computing response');
   res.type('text').send('pong');
 });
 
 // Not cached (5xx always bypasses cache)
-app.get('/error', cache(), (req, res) => {
+app.get('/error', cache(), (_req, res) => {
   console.log('[handler] GET /error — computing response');
   res.status(500).json({ error: 'Something went wrong' });
 });
@@ -91,25 +97,29 @@ app.post('/users', (req, res) => {
 
 // --- Cache inspection / management ---
 
-app.get('/cache', (req, res) => {
+app.get('/cache', (_req, res) => {
   res.json({ data: cache.getAll() });
 });
 
 app.get('/cache/:key(*)', (req, res) => {
   const key = `/${req.params.key}`;
   const entry = cache.get(key);
-  if (!entry) return res.status(404).json({ error: `No cache entry for "${key}"` });
+  if (!entry) {
+    return res.status(404).json({ error: `No cache entry for "${key}"` });
+  }
   res.json({ data: entry });
 });
 
 app.delete('/cache/:key(*)', (req, res) => {
   const key = `/${req.params.key}`;
   const deleted = cache.delete(key);
-  if (!deleted) return res.status(404).json({ error: `No cache entry for "${key}"` });
+  if (!deleted) {
+    return res.status(404).json({ error: `No cache entry for "${key}"` });
+  }
   res.json({ message: `Cache entry "${key}" deleted` });
 });
 
-app.delete('/cache', (req, res) => {
+app.delete('/cache', (_req, res) => {
   cache.clear();
   res.json({ message: 'Cache cleared' });
 });

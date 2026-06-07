@@ -1,4 +1,4 @@
-import { MemorizeEventType } from './MemorizeEventType';
+import type { MemorizeEventType } from './MemorizeEventType';
 
 /**
  * Emitted when an entry is automatically removed because the cache reached

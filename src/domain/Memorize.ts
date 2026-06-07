@@ -1,15 +1,15 @@
-import { RequestHandler } from 'express';
-import { CacheInfo } from './CacheInfo';
-import { MemorizeCallOptions } from './MemorizeCallOptions';
-import { MemorizeEventType } from './MemorizeEventType';
-import { MemorizeSetEvent } from './MemorizeSetEvent';
-import { MemorizeDeleteEvent } from './MemorizeDeleteEvent';
-import { MemorizeExpireEvent } from './MemorizeExpireEvent';
-import { MemorizeEmptyEvent } from './MemorizeEmptyEvent';
-import { MemorizeEvictEvent } from './MemorizeEvictEvent';
-import { MemorizeStats } from './MemorizeStats';
-import { MemorizeBatchOptions } from './MemorizeBatchOptions';
-import { MemorizeStore } from '../MemorizeStore';
+import type { RequestHandler } from 'express';
+import type { MemorizeStore } from '../MemorizeStore';
+import type { CacheInfo } from './CacheInfo';
+import type { MemorizeBatchOptions } from './MemorizeBatchOptions';
+import type { MemorizeCallOptions } from './MemorizeCallOptions';
+import type { MemorizeDeleteEvent } from './MemorizeDeleteEvent';
+import type { MemorizeEmptyEvent } from './MemorizeEmptyEvent';
+import type { MemorizeEventType } from './MemorizeEventType';
+import type { MemorizeEvictEvent } from './MemorizeEvictEvent';
+import type { MemorizeExpireEvent } from './MemorizeExpireEvent';
+import type { MemorizeSetEvent } from './MemorizeSetEvent';
+import type { MemorizeStats } from './MemorizeStats';
 
 /**
  * The cache instance returned by {@link memorize}.
@@ -287,11 +287,11 @@ export interface Memorize {
    * cache.on(MemorizeEventType.Empty,  ()  => console.log('cache is empty'));
    * ```
    */
-  on(event: MemorizeEventType.Set,    handler: (e: MemorizeSetEvent) => void): void;
+  on(event: MemorizeEventType.Set, handler: (e: MemorizeSetEvent) => void): void;
   on(event: MemorizeEventType.Delete, handler: (e: MemorizeDeleteEvent) => void): void;
   on(event: MemorizeEventType.Expire, handler: (e: MemorizeExpireEvent) => void): void;
-  on(event: MemorizeEventType.Empty,  handler: (e: MemorizeEmptyEvent) => void): void;
-  on(event: MemorizeEventType.Evict,  handler: (e: MemorizeEvictEvent) => void): void;
+  on(event: MemorizeEventType.Empty, handler: (e: MemorizeEmptyEvent) => void): void;
+  on(event: MemorizeEventType.Evict, handler: (e: MemorizeEvictEvent) => void): void;
 
   /**
    * Returns the number of active (non-expired) cache entries.

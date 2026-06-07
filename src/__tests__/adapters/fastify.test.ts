@@ -1,6 +1,6 @@
 import Fastify from 'fastify';
-import { memorize } from '../../memorize';
 import { createFastifyPlugin, createFastifyPreHandler } from '../../adapters/fastify';
+import { memorize } from '../../memorize';
 
 function buildApp(cache = memorize(), options?: Parameters<typeof createFastifyPlugin>[1]) {
   const app = Fastify();
@@ -150,11 +150,9 @@ describe('Fastify adapter — route-level preHandler', () => {
     const cache = memorize();
     const app = Fastify();
 
-    app.get(
-      '/users',
-      { preHandler: createFastifyPreHandler(cache, { ttl: 500 }) },
-      async () => ({ data: [] }),
-    );
+    app.get('/users', { preHandler: createFastifyPreHandler(cache, { ttl: 500 }) }, async () => ({
+      data: [],
+    }));
 
     await app.inject('/users');
     expect(cache.get('/users')).not.toBeNull();

@@ -1,4 +1,4 @@
-import { MemorizeEventType } from './MemorizeEventType';
+import type { MemorizeEventType } from './MemorizeEventType';
 
 /**
  * Emitted when a cache entry is manually removed via {@link Memorize.delete} or

@@ -1,4 +1,4 @@
-import { MemorizeEventType } from './MemorizeEventType';
+import type { MemorizeEventType } from './MemorizeEventType';
 
 /**
  * Emitted when a cache entry is automatically removed after its TTL elapses.

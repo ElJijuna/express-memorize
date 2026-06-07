@@ -1,6 +1,6 @@
 import type { Context } from 'koa';
-import { memorize } from '../../memorize';
 import { createKoaMiddleware } from '../../adapters/koa';
+import { memorize } from '../../memorize';
 
 interface TestContext extends Context {
   headers: Record<string, string>;
@@ -95,7 +95,11 @@ describe('Koa adapter — cache HIT (subsequent requests)', () => {
 
   it('returns cached body on hit', async () => {
     const cache = memorize();
-    cache._store.set('/users', { body: { data: [] }, statusCode: 200, contentType: 'application/json' });
+    cache._store.set('/users', {
+      body: { data: [] },
+      statusCode: 200,
+      contentType: 'application/json',
+    });
 
     const ctx = createContext();
     await createKoaMiddleware(cache)(ctx, jest.fn());

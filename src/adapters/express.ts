@@ -1,7 +1,7 @@
-import { Request, Response, NextFunction, RequestHandler } from 'express';
+import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import type { Memorize } from '../domain/Memorize';
-import { MemorizeStore } from '../MemorizeStore';
-import { MemorizeCallOptions } from '../domain/MemorizeCallOptions';
+import type { MemorizeCallOptions } from '../domain/MemorizeCallOptions';
+import type { MemorizeStore } from '../MemorizeStore';
 
 /**
  * Creates an Express `RequestHandler` that caches `GET` responses using the
@@ -32,10 +32,10 @@ export function createExpressMiddleware(
   store: MemorizeStore,
   globalTtl?: number,
 ): (callOptions?: MemorizeCallOptions) => RequestHandler {
-  return function (callOptions?: MemorizeCallOptions): RequestHandler {
+  return (callOptions?: MemorizeCallOptions): RequestHandler => {
     const effectiveTtl = callOptions?.ttl ?? globalTtl;
 
-    return function (req: Request, res: Response, next: NextFunction): void {
+    return (req: Request, res: Response, next: NextFunction): void => {
       if (req.method !== 'GET') {
         next();
         return;
@@ -59,9 +59,10 @@ export function createExpressMiddleware(
 
       const originalSend = res.send.bind(res) as (body?: unknown) => Response;
 
-      res.send = function (body?: unknown): Response {
+      res.send = (body?: unknown): Response => {
         if (res.statusCode >= 200 && res.statusCode < 300) {
-          const contentType = (res.getHeader('Content-Type') as string) ?? 'application/octet-stream';
+          const contentType =
+            (res.getHeader('Content-Type') as string) ?? 'application/octet-stream';
           store.set(key, { body, statusCode: res.statusCode, contentType }, effectiveTtl);
         }
         res.setHeader('X-Cache', 'MISS');

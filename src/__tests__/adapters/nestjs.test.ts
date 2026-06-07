@@ -1,4 +1,3 @@
-import { memorize } from '../../memorize';
 import {
   MemorizeCacheKey,
   MemorizeInterceptor,
@@ -6,6 +5,7 @@ import {
   MemorizeNoCache,
   MemorizeTtl,
 } from '../../adapters/nestjs';
+import { memorize } from '../../memorize';
 
 function observableOf<T>(value: T) {
   return {
@@ -49,9 +49,15 @@ function createContext({
   };
 }
 
-function subscribe<T>(source: { subscribe: (observer: { next?: (value: T) => void; complete?: () => void }) => unknown }) {
+function subscribe<T>(source: {
+  subscribe: (observer: { next?: (value: T) => void; complete?: () => void }) => unknown;
+}) {
   let result: T | undefined;
-  source.subscribe({ next: (value) => { result = value; } });
+  source.subscribe({
+    next: (value) => {
+      result = value;
+    },
+  });
   return result;
 }
 
@@ -61,7 +67,9 @@ describe('NestJS adapter', () => {
     const interceptor = new MemorizeInterceptor(cache);
     const { context, headers } = createContext();
 
-    const result = subscribe(interceptor.intercept(context, { handle: () => observableOf({ data: [] }) }));
+    const result = subscribe(
+      interceptor.intercept(context, { handle: () => observableOf({ data: [] }) }),
+    );
 
     expect(result).toEqual({ data: [] });
     expect(headers['X-Cache']).toBe('MISS');
@@ -112,7 +120,9 @@ describe('NestJS adapter', () => {
 
   it('uses the module key generator when no metadata key is present', () => {
     const cache = memorize();
-    const interceptor = new MemorizeInterceptor(cache, { key: ({ request }) => `generated:${request.originalUrl}` });
+    const interceptor = new MemorizeInterceptor(cache, {
+      key: ({ request }) => `generated:${request.originalUrl}`,
+    });
     const { context } = createContext();
 
     subscribe(interceptor.intercept(context, { handle: () => observableOf({ data: [] }) }));

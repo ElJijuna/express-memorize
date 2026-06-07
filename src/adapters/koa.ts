@@ -54,10 +54,7 @@ function inferContentType(body: unknown): string {
  * });
  * ```
  */
-export function createKoaMiddleware(
-  cache: Memorize,
-  options?: KoaAdapterOptions,
-): Middleware {
+export function createKoaMiddleware(cache: Memorize, options?: KoaAdapterOptions): Middleware {
   return async function memorizeKoaMiddleware(ctx: Context, next): Promise<void> {
     if (ctx.method !== 'GET') {
       await next();

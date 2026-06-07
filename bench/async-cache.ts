@@ -20,8 +20,12 @@ export async function runAsyncCacheBench() {
   });
   const smallBench = new Bench({ iterations: 500 });
   let i = 0;
-  smallBench.add('yield setAsync small', () => smallYield.setAsync(`small:yield:${i++}`, smallPayload, Infinity));
-  smallBench.add('worker setAsync small', () => smallWorker.setAsync(`small:worker:${i++}`, smallPayload, Infinity));
+  smallBench.add('yield setAsync small', () =>
+    smallYield.setAsync(`small:yield:${i++}`, smallPayload, Infinity),
+  );
+  smallBench.add('worker setAsync small', () =>
+    smallWorker.setAsync(`small:worker:${i++}`, smallPayload, Infinity),
+  );
   await smallBench.run();
   console.table(smallBench.table());
 
@@ -49,10 +53,18 @@ export async function runAsyncCacheBench() {
     asyncSerializerThresholdBytes: 0,
   });
   const largeBench = new Bench({ iterations: 100 });
-  largeBench.add('yield setAsync large', () => largeYield.setAsync(`large:yield:${i++}`, largePayload, Infinity));
-  largeBench.add('worker(1) setAsync large', () => largeWorker1.setAsync(`large:w1:${i++}`, largePayload, Infinity));
-  largeBench.add('worker(auto) setAsync large', () => largeWorkerAuto.setAsync(`large:wauto:${i++}`, largePayload, Infinity));
-  largeBench.add('worker(4) setAsync large', () => largeWorker4.setAsync(`large:w4:${i++}`, largePayload, Infinity));
+  largeBench.add('yield setAsync large', () =>
+    largeYield.setAsync(`large:yield:${i++}`, largePayload, Infinity),
+  );
+  largeBench.add('worker(1) setAsync large', () =>
+    largeWorker1.setAsync(`large:w1:${i++}`, largePayload, Infinity),
+  );
+  largeBench.add('worker(auto) setAsync large', () =>
+    largeWorkerAuto.setAsync(`large:wauto:${i++}`, largePayload, Infinity),
+  );
+  largeBench.add('worker(4) setAsync large', () =>
+    largeWorker4.setAsync(`large:w4:${i++}`, largePayload, Infinity),
+  );
   await largeBench.run();
   console.table(largeBench.table());
 
@@ -64,7 +76,9 @@ export async function runAsyncCacheBench() {
   const getBench = new Bench({ iterations: 100 });
   getBench.add('yield getValueAsync large', () => largeYield.getValueAsync('large:yield:hot'));
   getBench.add('worker(1) getValueAsync large', () => largeWorker1.getValueAsync('large:w1:hot'));
-  getBench.add('worker(auto) getValueAsync large', () => largeWorkerAuto.getValueAsync('large:wauto:hot'));
+  getBench.add('worker(auto) getValueAsync large', () =>
+    largeWorkerAuto.getValueAsync('large:wauto:hot'),
+  );
   getBench.add('worker(4) getValueAsync large', () => largeWorker4.getValueAsync('large:w4:hot'));
   await getBench.run();
   console.table(getBench.table());

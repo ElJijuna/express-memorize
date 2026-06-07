@@ -1,5 +1,5 @@
-import { MemorizeStore } from '../MemorizeStore';
 import { MemorizeEventType } from '../domain/MemorizeEventType';
+import { MemorizeStore } from '../MemorizeStore';
 
 const entry = (body: unknown = 'value') => ({
   body,
@@ -108,8 +108,12 @@ describe('MemorizeStore', () => {
       const s = new MemorizeStore();
       let yielded = false;
 
-      for (let i = 0; i < 5; i++) s.set(`/key/${i}`, entry(i));
-      setImmediate(() => { yielded = true; });
+      for (let i = 0; i < 5; i++) {
+        s.set(`/key/${i}`, entry(i));
+      }
+      setImmediate(() => {
+        yielded = true;
+      });
 
       const resultPromise = s.getAllAsync({ batchSize: 2 });
       expect(yielded).toBe(false);
@@ -209,8 +213,12 @@ describe('MemorizeStore', () => {
       let yielded = false;
 
       s.on(MemorizeEventType.Delete, () => yieldedByDelete.push(yielded));
-      for (let i = 0; i < 5; i++) s.set(`/key/${i}`, entry());
-      setImmediate(() => { yielded = true; });
+      for (let i = 0; i < 5; i++) {
+        s.set(`/key/${i}`, entry());
+      }
+      setImmediate(() => {
+        yielded = true;
+      });
 
       await s.clearAsync({ batchSize: 2 });
 
@@ -310,8 +318,12 @@ describe('MemorizeStore', () => {
       let yielded = false;
 
       s.on(MemorizeEventType.Delete, () => yieldedByDelete.push(yielded));
-      for (let i = 0; i < 5; i++) s.set(`/api/users/${i}`, entry());
-      setImmediate(() => { yielded = true; });
+      for (let i = 0; i < 5; i++) {
+        s.set(`/api/users/${i}`, entry());
+      }
+      setImmediate(() => {
+        yielded = true;
+      });
 
       await s.deleteMatchingAsync('/api/users/*', { batchSize: 2 });
 
@@ -328,7 +340,9 @@ describe('MemorizeStore', () => {
       s.set('/api/products/1', entry());
       s.set('/api/products/2', entry());
       s.set('/api/users/1', entry());
-      setImmediate(() => { yielded = true; });
+      setImmediate(() => {
+        yielded = true;
+      });
 
       await s.deleteMatchingAsync('/api/users/*', { batchSize: 2 });
 
@@ -336,7 +350,9 @@ describe('MemorizeStore', () => {
     });
 
     it('deleteMatchingAsync rejects invalid batch sizes', async () => {
-      await expect(store.deleteMatchingAsync('/api/users/*', { batchSize: -1 })).rejects.toThrow(RangeError);
+      await expect(store.deleteMatchingAsync('/api/users/*', { batchSize: -1 })).rejects.toThrow(
+        RangeError,
+      );
     });
   });
 
@@ -657,7 +673,9 @@ describe('MemorizeStore', () => {
 
     it('does not exceed maxEntries after multiple sets', () => {
       const s = new MemorizeStore(3);
-      ['/a', '/b', '/c', '/d', '/e'].forEach((k) => s.set(k, entry()));
+      ['/a', '/b', '/c', '/d', '/e'].forEach((k) => {
+        s.set(k, entry());
+      });
       expect(s.size()).toBe(3);
     });
 
@@ -711,7 +729,9 @@ describe('MemorizeStore', () => {
       s.set('/b', entry('bb'));
       const beforeEviction = s.byteSize();
       s.set('/c', entry('ccc')); // evicts /a
-      expect(s.byteSize()).toBe(beforeEviction - Buffer.byteLength('aaaa') + Buffer.byteLength('ccc'));
+      expect(s.byteSize()).toBe(
+        beforeEviction - Buffer.byteLength('aaaa') + Buffer.byteLength('ccc'),
+      );
     });
   });
 });

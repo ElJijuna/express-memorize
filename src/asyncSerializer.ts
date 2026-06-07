@@ -4,7 +4,12 @@ type BuiltInSerializerOption = 'json' | 'v8' | 'auto';
 
 type AsyncSerializerRequest =
   | { id: number; action: 'serialize'; serializer: BuiltInSerializerOption; value: unknown }
-  | { id: number; action: 'deserialize'; serializer: BuiltInSerializerOption; data: string | Buffer };
+  | {
+      id: number;
+      action: 'deserialize';
+      serializer: BuiltInSerializerOption;
+      data: string | Buffer;
+    };
 
 type AsyncSerializerResponse =
   | { id: number; result: unknown }
@@ -73,7 +78,9 @@ parentPort.on('message', (message) => {
 });
 `;
 
-function isWorkerSerializer(option: SerializerOption | undefined): option is 'json' | 'v8' | 'auto' | undefined {
+function isWorkerSerializer(
+  option: SerializerOption | undefined,
+): option is 'json' | 'v8' | 'auto' | undefined {
   return option === undefined || option === 'json' || option === 'v8' || option === 'auto';
 }
 
@@ -100,9 +107,15 @@ function normalizeWorkerCount(workers: number | 'auto' | undefined): number {
 }
 
 function normalizeWorkerResult(result: unknown): string | Buffer {
-  if (typeof result === 'string') return result;
-  if (Buffer.isBuffer(result)) return result;
-  if (result instanceof Uint8Array) return Buffer.from(result);
+  if (typeof result === 'string') {
+    return result;
+  }
+  if (Buffer.isBuffer(result)) {
+    return result;
+  }
+  if (result instanceof Uint8Array) {
+    return Buffer.from(result);
+  }
   throw new TypeError('worker serializer returned an unsupported value');
 }
 
@@ -114,14 +127,15 @@ export class WorkerAsyncSerializer {
 
   constructor(
     private readonly _serializer: BuiltInSerializerOption,
-    workers?: number | 'auto'
+    workers?: number | 'auto',
   ) {
     this.workerCount = normalizeWorkerCount(workers);
   }
 
   serialize(value: unknown): Promise<string | Buffer> {
-    return this._request({ id: 0, action: 'serialize', serializer: this._serializer, value })
-      .then(normalizeWorkerResult);
+    return this._request({ id: 0, action: 'serialize', serializer: this._serializer, value }).then(
+      normalizeWorkerResult,
+    );
   }
 
   deserialize(data: string | Buffer): Promise<unknown> {
@@ -147,13 +161,17 @@ export class WorkerAsyncSerializer {
 
   private _getSlot(): WorkerSlot {
     const available = this._slots.find((slot) => slot.pending.size === 0);
-    if (available) return available;
+    if (available) {
+      return available;
+    }
 
     if (this._slots.length < this.workerCount) {
       return this._createSlot();
     }
 
-    return this._slots.reduce((best, slot) => slot.pending.size < best.pending.size ? slot : best);
+    return this._slots.reduce((best, slot) =>
+      slot.pending.size < best.pending.size ? slot : best,
+    );
   }
 
   private _createSlot(): WorkerSlot {
@@ -168,7 +186,9 @@ export class WorkerAsyncSerializer {
 
   private _getWorkerConstructor(): WorkerConstructor {
     if (this._WorkerCtor !== undefined) {
-      if (!this._WorkerCtor) throw new Error('node:worker_threads is not available');
+      if (!this._WorkerCtor) {
+        throw new Error('node:worker_threads is not available');
+      }
       return this._WorkerCtor;
     }
 
@@ -185,7 +205,9 @@ export class WorkerAsyncSerializer {
 
   private _handleMessage(slot: WorkerSlot, message: AsyncSerializerResponse): void {
     const pending = slot.pending.get(message.id);
-    if (!pending) return;
+    if (!pending) {
+      return;
+    }
     slot.pending.delete(message.id);
 
     if ('error' in message) {
@@ -210,7 +232,9 @@ export class WorkerAsyncSerializer {
   }
 
   private _scheduleIdleShutdown(slot: WorkerSlot): void {
-    if (slot.pending.size > 0) return;
+    if (slot.pending.size > 0) {
+      return;
+    }
 
     slot.idleTimer = setTimeout(() => {
       this._removeSlot(slot);
@@ -223,7 +247,9 @@ export class WorkerAsyncSerializer {
   }
 
   private _clearIdleTimer(slot: WorkerSlot): void {
-    if (!slot.idleTimer) return;
+    if (!slot.idleTimer) {
+      return;
+    }
     clearTimeout(slot.idleTimer);
     slot.idleTimer = null;
   }
@@ -231,14 +257,18 @@ export class WorkerAsyncSerializer {
   private _removeSlot(slot: WorkerSlot): void {
     this._clearIdleTimer(slot);
     const index = this._slots.indexOf(slot);
-    if (index !== -1) this._slots.splice(index, 1);
+    if (index !== -1) {
+      this._slots.splice(index, 1);
+    }
   }
 }
 
 export function createWorkerAsyncSerializer(
   option: SerializerOption | undefined,
-  workers?: number | 'auto'
+  workers?: number | 'auto',
 ): WorkerAsyncSerializer | null {
-  if (!isWorkerSerializer(option)) return null;
+  if (!isWorkerSerializer(option)) {
+    return null;
+  }
   return new WorkerAsyncSerializer(option ?? 'auto', workers);
 }

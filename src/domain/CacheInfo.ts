@@ -1,4 +1,4 @@
-import { CacheEntry } from './CacheEntry';
+import type { CacheEntry } from './CacheEntry';
 
 /**
  * A cache entry enriched with lookup metadata, returned by {@link Memorize.get} and

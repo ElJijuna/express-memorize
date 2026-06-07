@@ -1,9 +1,9 @@
-import { Bench } from 'tinybench';
 import v8 from 'node:v8';
+import { Bench } from 'tinybench';
 import { createSerializer } from '../src/serializer';
 
 const json = createSerializer('json');
-const v8s  = createSerializer('v8');
+const v8s = createSerializer('v8');
 
 const simplePayload = { id: 1, name: 'Alice', active: true, score: 98.6 };
 const complexPayload = {
@@ -32,7 +32,7 @@ export async function runSerializerBench() {
 
   console.log('\n=== Serializer: large array (500 items) ===');
   const jsonLargeEncoded = json.serialize(largePayload);
-  const v8LargeEncoded  = v8s.serialize(largePayload);
+  const v8LargeEncoded = v8s.serialize(largePayload);
   const large = new Bench({ iterations: 5_000 });
   large.add('JSON serialize  ', () => json.serialize(largePayload));
   large.add('v8   serialize  ', () => v8s.serialize(largePayload));

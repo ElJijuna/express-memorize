@@ -16,7 +16,9 @@ export function globToRegex(pattern: string): RegExp {
     if (ch === '*' && pattern[i + 1] === '*') {
       result += '.*';
       i += 2;
-      if (pattern[i] === '/') i++;
+      if (pattern[i] === '/') {
+        i++;
+      }
     } else if (ch === '*') {
       result += '[^/]*';
       i++;
