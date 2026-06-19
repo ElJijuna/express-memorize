@@ -56,7 +56,9 @@ export function cacheFetchHandler(
     if (options?.noCache) {
       const response = await handler(request);
       const headers = new Headers(response.headers);
+
       headers.set('X-Cache', 'BYPASS');
+
       return new Response(response.body, { status: response.status, headers });
     }
 
@@ -79,10 +81,13 @@ export function cacheFetchHandler(
     if (response.status >= 200 && response.status < 300) {
       const body = await response.clone().text();
       const contentType = response.headers.get('Content-Type') ?? 'application/octet-stream';
+
       cache._store.set(key, { body, statusCode: response.status, contentType }, options?.ttl);
 
       const headers = new Headers(response.headers);
+
       headers.set('X-Cache', 'MISS');
+
       return new Response(body, { status: response.status, headers });
     }
 

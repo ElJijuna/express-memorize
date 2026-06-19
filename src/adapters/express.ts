@@ -38,12 +38,14 @@ export function createExpressMiddleware(
     return (req: Request, res: Response, next: NextFunction): void => {
       if (req.method !== 'GET') {
         next();
+
         return;
       }
 
       if (callOptions?.noCache) {
         res.setHeader('X-Cache', 'BYPASS');
         next();
+
         return;
       }
 
@@ -54,6 +56,7 @@ export function createExpressMiddleware(
         res.setHeader('X-Cache', 'HIT');
         res.setHeader('Content-Type', cached.contentType);
         res.status(cached.statusCode).send(cached.body);
+
         return;
       }
 
@@ -63,9 +66,12 @@ export function createExpressMiddleware(
         if (res.statusCode >= 200 && res.statusCode < 300) {
           const contentType =
             (res.getHeader('Content-Type') as string) ?? 'application/octet-stream';
+
           store.set(key, { body, statusCode: res.statusCode, contentType }, effectiveTtl);
         }
+
         res.setHeader('X-Cache', 'MISS');
+
         return originalSend(body);
       };
 

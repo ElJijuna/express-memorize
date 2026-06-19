@@ -4,21 +4,25 @@ import { memorize } from '../../memorize';
 
 function buildApp(cache = memorize(), options?: Parameters<typeof createFastifyPlugin>[1]) {
   const app = Fastify();
+
   app.register(createFastifyPlugin(cache, options));
   app.get('/users', async () => ({ data: [] }));
   app.post('/users', async () => ({ created: true }));
   app.get('/error', async (_request, reply) => reply.code(404).send('Not Found'));
+
   return app;
 }
 
 describe('Fastify adapter — cache MISS (first request)', () => {
   it('sets X-Cache: MISS on first request', async () => {
     const res = await buildApp().inject('/users');
+
     expect(res.headers['x-cache']).toBe('MISS');
   });
 
   it('returns the handler response on a miss', async () => {
     const res = await buildApp().inject('/users');
+
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ data: [] });
   });
@@ -26,6 +30,7 @@ describe('Fastify adapter — cache MISS (first request)', () => {
   it('does not cache non-2xx responses', async () => {
     const cache = memorize();
     const app = buildApp(cache);
+
     await app.inject('/error');
     expect(cache.get('/error')).toBeNull();
   });
@@ -33,6 +38,7 @@ describe('Fastify adapter — cache MISS (first request)', () => {
   it('does not cache non-GET requests', async () => {
     const cache = memorize();
     const app = buildApp(cache);
+
     await app.inject({ url: '/users', method: 'POST' });
     expect(cache.get('/users')).toBeNull();
   });
@@ -41,15 +47,19 @@ describe('Fastify adapter — cache MISS (first request)', () => {
 describe('Fastify adapter — cache HIT (subsequent requests)', () => {
   it('sets X-Cache: HIT on second request', async () => {
     const app = buildApp();
+
     await app.inject('/users');
     const res = await app.inject('/users');
+
     expect(res.headers['x-cache']).toBe('HIT');
   });
 
   it('returns cached body on hit', async () => {
     const app = buildApp();
+
     await app.inject('/users');
     const res = await app.inject('/users');
+
     expect(res.json()).toEqual({ data: [] });
   });
 
@@ -68,14 +78,17 @@ describe('Fastify adapter — cache HIT (subsequent requests)', () => {
 
   it('restores Content-Type on hit', async () => {
     const app = buildApp();
+
     await app.inject('/users');
     const res = await app.inject('/users');
+
     expect(res.headers['content-type']).toContain('application/json');
   });
 
   it('increments hit counter on cache hit', async () => {
     const cache = memorize();
     const app = buildApp(cache);
+
     await app.inject('/users');
     await app.inject('/users');
     await app.inject('/users');
@@ -86,11 +99,13 @@ describe('Fastify adapter — cache HIT (subsequent requests)', () => {
 describe('Fastify adapter — noCache', () => {
   it('sets X-Cache: BYPASS when noCache is true', async () => {
     const res = await buildApp(memorize(), { noCache: true }).inject('/users');
+
     expect(res.headers['x-cache']).toBe('BYPASS');
   });
 
   it('does not store response when noCache is true', async () => {
     const cache = memorize();
+
     await buildApp(cache, { noCache: true }).inject('/users');
     expect(cache.get('/users')).toBeNull();
   });
@@ -102,8 +117,10 @@ describe('Fastify adapter — TTL', () => {
   it('respects global TTL from memorize options', async () => {
     const cache = memorize({ ttl: 500 });
     const app = buildApp(cache);
+
     await app.inject('/users');
     const cached = cache.get('/users');
+
     expect(cached).not.toBeNull();
 
     jest.useFakeTimers({ now: cached!.expiresAt! + 1 });
@@ -113,8 +130,10 @@ describe('Fastify adapter — TTL', () => {
   it('respects per-route TTL', async () => {
     const cache = memorize();
     const app = buildApp(cache, { ttl: 500 });
+
     await app.inject('/users');
     const cached = cache.get('/users');
+
     expect(cached).not.toBeNull();
 
     jest.useFakeTimers({ now: cached!.expiresAt! - 1 });
@@ -159,6 +178,7 @@ describe('Fastify adapter — route-level preHandler', () => {
 
     cache.delete('/users');
     const res = await app.inject('/users');
+
     expect(res.headers['x-cache']).toBe('MISS');
   });
 });

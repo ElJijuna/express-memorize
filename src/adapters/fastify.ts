@@ -92,12 +92,14 @@ export function createFastifyPreHandler(
   ): void {
     if (request.method !== 'GET') {
       done();
+
       return;
     }
 
     if (options?.noCache) {
       reply.header('X-Cache', 'BYPASS');
       done();
+
       return;
     }
 
@@ -110,13 +112,14 @@ export function createFastifyPreHandler(
         .type(cached.contentType)
         .code(cached.statusCode)
         .send(cached.body);
+
       return;
     }
 
     const originalSend = reply.send.bind(reply) as (payload?: unknown) => FastifyReply;
 
     reply.send = function sendWithCache(payload?: unknown): FastifyReply {
-      const statusCode = reply.statusCode;
+      const {statusCode} = reply;
 
       if (statusCode >= 200 && statusCode < 300) {
         const ttl = options?.ttl ?? cache._ttl;
@@ -125,10 +128,12 @@ export function createFastifyPreHandler(
           reply.getHeader('content-type')?.toString() ??
           serialized.contentType ??
           'application/octet-stream';
+
         cache._store.set(key, { body: serialized.body, statusCode, contentType }, ttl);
       }
 
       reply.header('X-Cache', 'MISS');
+
       return originalSend(payload);
     };
 

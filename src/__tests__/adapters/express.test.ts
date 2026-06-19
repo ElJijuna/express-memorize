@@ -4,15 +4,16 @@ import { memorize } from '../../memorize';
 
 function createMockReqRes(url = '/users', method = 'GET') {
   const responseHeaders: Record<string, string> = {};
-
   const res: any = {
     statusCode: 200,
     status(code: number) {
       this.statusCode = code;
+
       return this;
     },
     setHeader(name: string, value: string) {
       responseHeaders[name] = value;
+
       return this;
     },
     getHeader(name: string) {
@@ -20,12 +21,16 @@ function createMockReqRes(url = '/users', method = 'GET') {
     },
     send: jest.fn().mockReturnThis(),
   };
+
   res.json = (body: unknown) => {
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
+
     return res.send(JSON.stringify(body));
   };
+
   const req = { originalUrl: url, method } as unknown as Request;
   const next = jest.fn() as unknown as NextFunction;
+
   return { req, res, next, responseHeaders };
 }
 
@@ -34,6 +39,7 @@ describe('createExpressAdapter (express-memorize/express)', () => {
     const cache = memorize();
     const handler = createExpressAdapter(cache);
     const { req, res, next, responseHeaders } = createMockReqRes();
+
     handler(req, res, next);
     (res as any).json({ data: [] });
     expect(responseHeaders['X-Cache']).toBe('MISS');
@@ -42,12 +48,13 @@ describe('createExpressAdapter (express-memorize/express)', () => {
   it('returns a RequestHandler that sets X-Cache: HIT on second request', () => {
     const cache = memorize();
     const handler = createExpressAdapter(cache);
-
     const { req, res, next } = createMockReqRes();
+
     handler(req, res, next);
     (res as any).json({ data: [] });
 
     const { req: req2, res: res2, next: next2, responseHeaders: h2 } = createMockReqRes();
+
     handler(req2, res2, next2);
     expect(h2['X-Cache']).toBe('HIT');
     expect(next2).not.toHaveBeenCalled();
@@ -55,14 +62,15 @@ describe('createExpressAdapter (express-memorize/express)', () => {
 
   it('shares the store with cache.express()', () => {
     const cache = memorize();
-
     // Prime via cache.express()
     const { req, res, next } = createMockReqRes('/ping');
+
     cache.express()(req, res, next);
     (res as any).json({ ok: true });
 
     // Hit via createExpressAdapter
     const { req: req2, res: res2, next: next2, responseHeaders: h2 } = createMockReqRes('/ping');
+
     createExpressAdapter(cache)(req2, res2, next2);
     expect(h2['X-Cache']).toBe('HIT');
     expect(next2).not.toHaveBeenCalled();
@@ -72,8 +80,8 @@ describe('createExpressAdapter (express-memorize/express)', () => {
     jest.useFakeTimers();
     const cache = memorize({ ttl: 60_000 });
     const handler = createExpressAdapter(cache, { ttl: 500 });
-
     const { req, res, next } = createMockReqRes();
+
     handler(req, res, next);
     (res as any).json({ ok: true });
 
@@ -86,6 +94,7 @@ describe('createExpressAdapter (express-memorize/express)', () => {
     const cache = memorize();
     const handler = createExpressAdapter(cache, { noCache: true });
     const { req, res, next, responseHeaders } = createMockReqRes();
+
     handler(req, res, next);
     expect(responseHeaders['X-Cache']).toBe('BYPASS');
     expect(next).toHaveBeenCalledTimes(1);
