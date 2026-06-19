@@ -1,6 +1,12 @@
 import { runEventLoopBench } from './eventloop';
 
-runEventLoopBench().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+async function run() {
+  try {
+    await runEventLoopBench();
+  } catch (err) {
+    console.error(err);
+    process.exit(1);
+  }
+}
+
+void run();

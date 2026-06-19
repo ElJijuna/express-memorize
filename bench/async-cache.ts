@@ -19,7 +19,9 @@ export async function runAsyncCacheBench() {
     asyncSerializerThresholdBytes: 0,
   });
   const smallBench = new Bench({ iterations: 500 });
+
   let i = 0;
+
   smallBench.add('yield setAsync small', () =>
     smallYield.setAsync(`small:yield:${i++}`, smallPayload, Infinity),
   );
@@ -53,6 +55,7 @@ export async function runAsyncCacheBench() {
     asyncSerializerThresholdBytes: 0,
   });
   const largeBench = new Bench({ iterations: 100 });
+
   largeBench.add('yield setAsync large', () =>
     largeYield.setAsync(`large:yield:${i++}`, largePayload, Infinity),
   );
@@ -74,6 +77,7 @@ export async function runAsyncCacheBench() {
   await largeWorkerAuto.setAsync('large:wauto:hot', largePayload, Infinity);
   await largeWorker4.setAsync('large:w4:hot', largePayload, Infinity);
   const getBench = new Bench({ iterations: 100 });
+
   getBench.add('yield getValueAsync large', () => largeYield.getValueAsync('large:yield:hot'));
   getBench.add('worker(1) getValueAsync large', () => largeWorker1.getValueAsync('large:w1:hot'));
   getBench.add('worker(auto) getValueAsync large', () =>

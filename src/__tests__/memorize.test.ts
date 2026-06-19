@@ -1,11 +1,11 @@
 import { setImmediate } from 'node:timers';
-import type { NextFunction, Request } from 'express';
+import type { NextFunction, Request, Response } from 'express';
 import { MemorizeEventType } from '../domain/MemorizeEventType';
 import { memorize } from '../memorize';
 
 function createMockReqRes(url = '/test', method = 'GET') {
   const responseHeaders: Record<string, string> = {};
-  const res: any = {
+  const res = {
     statusCode: 200,
     status(code: number) {
       this.statusCode = code;
@@ -21,15 +21,12 @@ function createMockReqRes(url = '/test', method = 'GET') {
       return responseHeaders[name];
     },
     send: jest.fn().mockReturnThis(),
-  };
+    json(body: unknown) {
+      this.setHeader('Content-Type', 'application/json; charset=utf-8');
 
-  // Simulate Express's res.json: sets Content-Type then calls res.send
-  (res as any).json = (body: unknown) => {
-    (res as any).setHeader('Content-Type', 'application/json; charset=utf-8');
-
-    return (res as any).send(JSON.stringify(body));
-  };
-
+      return this.send(JSON.stringify(body));
+    },
+  } as unknown as Response;
   const req = { originalUrl: url, method } as unknown as Request;
   const next = jest.fn() as unknown as NextFunction;
 
@@ -49,7 +46,7 @@ describe('memorize middleware', () => {
       const { req, res, next, responseHeaders } = createMockReqRes();
 
       memorize()()(req, res, next);
-      (res as any).json({ data: [] });
+      res.json({ data: [] });
 
       expect(responseHeaders['X-Cache']).toBe('MISS');
     });
@@ -61,7 +58,7 @@ describe('memorize middleware', () => {
       const { req: getReq, res: getRes, next: getNext } = createMockReqRes('/users', 'GET');
 
       middleware(getReq, getRes, getNext);
-      (getRes as any).json({ data: [] });
+      getRes.json({ data: [] });
 
       // Non-GET to same URL: must call next and not return cached response
       const { req, res, next } = createMockReqRes('/users', method);
@@ -78,7 +75,7 @@ describe('memorize middleware', () => {
 
       res.statusCode = 404;
       middleware(req, res, next);
-      (res as any).send('Not Found');
+      res.send('Not Found');
 
       // Second request: should still call next, not return cached data
       const { req: req2, res: res2, next: next2 } = createMockReqRes('/error');
@@ -94,7 +91,7 @@ describe('memorize middleware', () => {
 
       res.statusCode = 201;
       middleware(req, res, next);
-      (res as any).json({ created: true });
+      res.json({ created: true });
 
       const {
         req: req2,
@@ -117,7 +114,7 @@ describe('memorize middleware', () => {
       const { req, res, next } = createMockReqRes('/users');
 
       middleware(req, res, next);
-      (res as any).json({ data: [{ name: 'Ivan' }] });
+      res.json({ data: [{ name: 'Ivan' }] });
 
       const { req: req2, res: res2, next: next2 } = createMockReqRes('/users');
 
@@ -132,7 +129,7 @@ describe('memorize middleware', () => {
       const { req, res, next } = createMockReqRes('/users');
 
       middleware(req, res, next);
-      (res as any).json({ data: [] });
+      res.json({ data: [] });
 
       const { req: req2, res: res2, next: next2, responseHeaders: h2 } = createMockReqRes('/users');
 
@@ -147,8 +144,8 @@ describe('memorize middleware', () => {
       const { req, res, next } = createMockReqRes('/ping');
 
       middleware(req, res, next);
-      (res as any).setHeader('Content-Type', 'text/plain; charset=utf-8');
-      (res as any).send('pong');
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+      res.send('pong');
 
       const { req: req2, res: res2, next: next2, responseHeaders: h2 } = createMockReqRes('/ping');
 
@@ -163,7 +160,7 @@ describe('memorize middleware', () => {
       const { req: rA, res: rsA, next: nA } = createMockReqRes('/a');
 
       middleware(rA, rsA, nA);
-      (rsA as any).json({ route: 'a' });
+      rsA.json({ route: 'a' });
 
       // /b has never been cached — next must be called
       const { req: rB, res: rsB, next: nB } = createMockReqRes('/b');
@@ -180,7 +177,7 @@ describe('memorize middleware', () => {
       const { req, res, next } = createMockReqRes('/users');
 
       middleware(req, res, next);
-      (res as any).json({ data: [] });
+      res.json({ data: [] });
 
       const info = cache.get('/users');
 
@@ -198,7 +195,7 @@ describe('memorize middleware', () => {
       const { req, res, next } = createMockReqRes('/users');
 
       middleware(req, res, next);
-      (res as any).json({ data: [] });
+      res.json({ data: [] });
 
       cache.delete('/users');
 
@@ -216,7 +213,7 @@ describe('memorize middleware', () => {
         const { req, res, next } = createMockReqRes(url);
 
         middleware(req, res, next);
-        (res as any).json({ url });
+        res.json({ url });
       });
 
       expect(Object.keys(cache.getAll())).toHaveLength(3);
@@ -241,7 +238,7 @@ describe('memorize middleware', () => {
       const { req, res, next } = createMockReqRes('/users');
 
       middleware(req, res, next);
-      (res as any).json({ data: [] });
+      res.json({ data: [] });
 
       cache.clear();
       expect(cache.getAll()).toEqual({});
@@ -291,7 +288,7 @@ describe('memorize middleware', () => {
       const { req, res, next } = createMockReqRes('/users');
 
       middleware(req, res, next);
-      (res as any).json({ data: [] });
+      res.json({ data: [] });
 
       expect(cache.get('/users')).toBeNull();
     });
@@ -302,7 +299,7 @@ describe('memorize middleware', () => {
       const { req, res, next } = createMockReqRes('/users');
 
       cache()(req, res, next);
-      (res as any).json({ data: [] });
+      res.json({ data: [] });
 
       // noCache request: must call next and set BYPASS, not serve the cached HIT
       const { req: req2, res: res2, next: next2, responseHeaders: h2 } = createMockReqRes('/users');
@@ -324,7 +321,7 @@ describe('memorize middleware', () => {
       const { req, res, next } = createMockReqRes('/users');
 
       middleware(req, res, next);
-      (res as any).json({ data: [] });
+      res.json({ data: [] });
 
       jest.advanceTimersByTime(999);
       expect(cache.get('/users')).not.toBeNull();
@@ -339,7 +336,7 @@ describe('memorize middleware', () => {
       const { req, res, next } = createMockReqRes('/fast');
 
       middleware(req, res, next);
-      (res as any).json({ ok: true });
+      res.json({ ok: true });
 
       jest.advanceTimersByTime(600);
       expect(cache.get('/fast')).toBeNull();
@@ -351,7 +348,7 @@ describe('memorize middleware', () => {
       const { req, res, next } = createMockReqRes('/users');
 
       middleware(req, res, next);
-      (res as any).json({ data: [] });
+      res.json({ data: [] });
 
       jest.advanceTimersByTime(1001);
 
@@ -371,7 +368,7 @@ describe('memorize middleware', () => {
       const { req, res, next } = createMockReqRes('/shared');
 
       m1(req, res, next);
-      (res as any).json({ via: 'm1' });
+      res.json({ via: 'm1' });
 
       // Hit via m2
       const {
@@ -393,7 +390,7 @@ describe('memorize middleware', () => {
       const { req, res, next } = createMockReqRes('/users');
 
       cache1()(req, res, next);
-      (res as any).json({ data: [] });
+      res.json({ data: [] });
 
       // cache2 has its own store — should be a MISS
       const { req: req2, res: res2, next: next2 } = createMockReqRes('/users');
@@ -409,7 +406,7 @@ describe('memorize middleware', () => {
       const { req, res, next, responseHeaders } = createMockReqRes('/users');
 
       cache.express()(req, res, next);
-      (res as any).json({ data: [] });
+      res.json({ data: [] });
       expect(next).toHaveBeenCalledTimes(1);
       expect(responseHeaders['X-Cache']).toBe('MISS');
     });
@@ -419,7 +416,7 @@ describe('memorize middleware', () => {
       const { req, res, next } = createMockReqRes('/users');
 
       cache.express()(req, res, next);
-      (res as any).json({ data: [] });
+      res.json({ data: [] });
 
       const { req: req2, res: res2, next: next2, responseHeaders: h2 } = createMockReqRes('/users');
 
@@ -434,7 +431,7 @@ describe('memorize middleware', () => {
       const { req, res, next } = createMockReqRes('/ping');
 
       cache()(req, res, next);
-      (res as any).json({ ok: true });
+      res.json({ ok: true });
 
       // Hit via cache.express()
       const { req: req2, res: res2, next: next2, responseHeaders: h2 } = createMockReqRes('/ping');
@@ -910,7 +907,7 @@ describe('memorize middleware', () => {
         const { req, res, next } = createMockReqRes(url);
 
         middleware(req, res, next);
-        (res as any).json({ url });
+        res.json({ url });
       });
       expect(cache.size()).toBe(2);
     });

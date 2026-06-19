@@ -7,10 +7,13 @@ const DEFAULT_BATCH_SIZE = 1_000;
 
 function readPositiveInt(name: string, fallback: number): number {
   const raw = process.env[name];
+
   if (!raw) {
     return fallback;
   }
+
   const value = Number(raw);
+
   return Number.isInteger(value) && value > 0 ? value : fallback;
 }
 
@@ -40,6 +43,7 @@ async function measureBlock(
   fn: () => undefined | number | Promise<undefined | number>,
 ): Promise<{ name: string; durationMs: string; eventLoopMaxMs: string; result: number | string }> {
   const delay = monitorEventLoopDelay({ resolution: 1 });
+
   delay.enable();
   await waitForMonitorTick();
 
@@ -77,6 +81,7 @@ export async function runEventLoopBench() {
       for (let i = 0; i < entries; i++) {
         cache.set(`key:${i}`, createPayload(i, payloadItems));
       }
+
       return cache.size();
     }),
   );
@@ -84,11 +89,13 @@ export async function runEventLoopBench() {
   rows.push(
     await measureBlock('hot getValue()', () => {
       let hits = 0;
+
       for (let i = 0; i < entries; i++) {
         if (cache.getValue(`key:${i}`) !== undefined) {
           hits++;
         }
       }
+
       return hits;
     }),
   );
@@ -100,7 +107,9 @@ export async function runEventLoopBench() {
   rows.push(
     await measureBlock('clear()', () => {
       const before = cache.size();
+
       cache.clear();
+
       return before;
     }),
   );
@@ -110,6 +119,7 @@ export async function runEventLoopBench() {
       for (let i = 0; i < entries; i++) {
         asyncCache.set(`key:${i}`, createPayload(i, payloadItems));
       }
+
       return asyncCache.size();
     }),
   );
