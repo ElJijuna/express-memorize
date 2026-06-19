@@ -2,6 +2,7 @@ import express from 'express';
 import { MemorizeEventType, memorize } from '../../src';
 
 const app = express();
+
 app.use(express.json());
 
 const cache = memorize({ ttl: 30_000 }); // TTL global: 30s
@@ -30,7 +31,6 @@ const users = [
   { id: 1, name: 'Ivan' },
   { id: 2, name: 'Maria' },
 ];
-
 const products = [
   { id: 1, name: 'Laptop', price: 999 },
   { id: 2, name: 'Mouse', price: 29 },
@@ -48,18 +48,22 @@ app.get('/users', cache(), (_req, res) => {
 app.get('/users/:id', cache(), (req, res) => {
   console.log('[handler] GET /users/:id — computing response');
   const user = users.find((u) => u.id === parseInt(req.params.id, 10));
+
   if (!user) {
     return res.status(404).json({ error: 'User not found' });
   }
+
   res.json({ data: user });
 });
 
 app.delete('/users/:id', (req, res) => {
   const id = parseInt(req.params.id, 10);
   const index = users.findIndex((u) => u.id === id);
+
   if (index === -1) {
     return res.status(404).json({ error: 'User not found' });
   }
+
   users.splice(index, 1);
   cache.delete(`/users/${id}`);
   cache.delete('/users');
@@ -89,6 +93,7 @@ app.get('/error', cache(), (_req, res) => {
 app.post('/users', (req, res) => {
   const { name } = req.body as { name: string };
   const newUser = { id: users.length + 1, name };
+
   users.push(newUser);
   cache.delete('/users');
   console.log(`[handler] POST /users — added "${name}", cache invalidated`);
@@ -104,18 +109,22 @@ app.get('/cache', (_req, res) => {
 app.get('/cache/:key(*)', (req, res) => {
   const key = `/${req.params.key}`;
   const entry = cache.get(key);
+
   if (!entry) {
     return res.status(404).json({ error: `No cache entry for "${key}"` });
   }
+
   res.json({ data: entry });
 });
 
 app.delete('/cache/:key(*)', (req, res) => {
   const key = `/${req.params.key}`;
   const deleted = cache.delete(key);
+
   if (!deleted) {
     return res.status(404).json({ error: `No cache entry for "${key}"` });
   }
+
   res.json({ message: `Cache entry "${key}" deleted` });
 });
 
@@ -127,6 +136,7 @@ app.delete('/cache', (_req, res) => {
 // --- Start ---
 
 const PORT = 3000;
+
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
   console.log('');

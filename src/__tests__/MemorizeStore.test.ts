@@ -1,3 +1,4 @@
+import { setImmediate } from 'node:timers';
 import { MemorizeEventType } from '../domain/MemorizeEventType';
 import { MemorizeStore } from '../MemorizeStore';
 
@@ -40,7 +41,7 @@ describe('MemorizeStore', () => {
     it('uses a finite default TTL when no TTL is set', () => {
       jest.useFakeTimers();
       store.set('/users', entry());
-      const remainingTtl = store.get('/users')!.remainingTtl;
+      const {remainingTtl} = (store.get('/users')!);
 
       expect(remainingTtl).not.toBeNull();
       expect(remainingTtl).toBeGreaterThan(0);
@@ -73,6 +74,7 @@ describe('MemorizeStore', () => {
       store.set('/a', entry());
       store.getRaw('/a');
       const all = store.getAll();
+
       expect(all['/a'].hits).toBe(2);
     });
   });
@@ -83,6 +85,7 @@ describe('MemorizeStore', () => {
       store.set('/b', entry(2));
 
       const all = store.getAll();
+
       expect(Object.keys(all)).toHaveLength(2);
       expect(all['/a'].body).toBe(1);
       expect(all['/b'].body).toBe(2);
@@ -106,16 +109,19 @@ describe('MemorizeStore', () => {
     it('getAllAsync yields between batches', async () => {
       jest.useRealTimers();
       const s = new MemorizeStore();
+
       let yielded = false;
 
       for (let i = 0; i < 5; i++) {
         s.set(`/key/${i}`, entry(i));
       }
+
       setImmediate(() => {
         yielded = true;
       });
 
       const resultPromise = s.getAllAsync({ batchSize: 2 });
+
       expect(yielded).toBe(false);
 
       const result = await resultPromise;
@@ -132,6 +138,7 @@ describe('MemorizeStore', () => {
   describe('empty event', () => {
     it('fires when the last entry is deleted', () => {
       const handler = jest.fn();
+
       store.on(MemorizeEventType.Empty, handler);
       store.set('/a', entry());
       store.set('/b', entry());
@@ -146,6 +153,7 @@ describe('MemorizeStore', () => {
 
     it('fires when clear() empties the store', () => {
       const handler = jest.fn();
+
       store.on(MemorizeEventType.Empty, handler);
       store.set('/a', entry());
       store.set('/b', entry());
@@ -157,6 +165,7 @@ describe('MemorizeStore', () => {
     it('fires when the last entry expires', () => {
       jest.useFakeTimers();
       const handler = jest.fn();
+
       store.on(MemorizeEventType.Empty, handler);
       store.set('/a', entry(), 500);
       jest.advanceTimersByTime(600);
@@ -167,6 +176,7 @@ describe('MemorizeStore', () => {
 
     it('does not fire when the store still has entries', () => {
       const handler = jest.fn();
+
       store.on(MemorizeEventType.Empty, handler);
       store.set('/a', entry());
       store.set('/b', entry());
@@ -210,12 +220,15 @@ describe('MemorizeStore', () => {
       jest.useRealTimers();
       const s = new MemorizeStore();
       const yieldedByDelete: boolean[] = [];
+
       let yielded = false;
 
       s.on(MemorizeEventType.Delete, () => yieldedByDelete.push(yielded));
+
       for (let i = 0; i < 5; i++) {
         s.set(`/key/${i}`, entry());
       }
+
       setImmediate(() => {
         yielded = true;
       });
@@ -268,6 +281,7 @@ describe('MemorizeStore', () => {
 
     it('emits a delete event for each removed entry', () => {
       const handler = jest.fn();
+
       store.on(MemorizeEventType.Delete, handler);
       store.set('/api/users/1', entry());
       store.set('/api/users/2', entry());
@@ -279,6 +293,7 @@ describe('MemorizeStore', () => {
 
     it('emits empty event when last entries are removed', () => {
       const handler = jest.fn();
+
       store.on(MemorizeEventType.Empty, handler);
       store.set('/api/users/1', entry());
       store.set('/api/users/2', entry());
@@ -315,12 +330,15 @@ describe('MemorizeStore', () => {
       jest.useRealTimers();
       const s = new MemorizeStore();
       const yieldedByDelete: boolean[] = [];
+
       let yielded = false;
 
       s.on(MemorizeEventType.Delete, () => yieldedByDelete.push(yielded));
+
       for (let i = 0; i < 5; i++) {
         s.set(`/api/users/${i}`, entry());
       }
+
       setImmediate(() => {
         yielded = true;
       });
@@ -334,6 +352,7 @@ describe('MemorizeStore', () => {
       jest.useRealTimers();
       const s = new MemorizeStore();
       const yieldedByDelete: boolean[] = [];
+
       let yielded = false;
 
       s.on(MemorizeEventType.Delete, () => yieldedByDelete.push(yielded));
@@ -386,6 +405,7 @@ describe('MemorizeStore', () => {
       jest.setSystemTime(Date.now() + 2000);
 
       const info = store.get('/users');
+
       expect(info!.remainingTtl).toBeLessThanOrEqual(3000);
     });
 
@@ -415,13 +435,15 @@ describe('MemorizeStore', () => {
       jest.advanceTimersByTime(9_999_999);
 
       const info = store.get('/users');
+
       expect(info).not.toBeNull();
       expect(info!.remainingTtl).toBeNull();
       expect(info!.expiresAt).toBeNull();
     });
 
     it('unrefs the shared TTL scheduler so it does not keep the process alive', () => {
-      jest.useRealTimers();
+      // Spy on global.setTimeout while fake timers are active (it's an own property then).
+      // Calling jest.useRealTimers() first would delete the own property, breaking spyOn.
       const unref = jest.fn();
       const setTimeoutSpy = jest
         .spyOn(global, 'setTimeout')
@@ -432,12 +454,12 @@ describe('MemorizeStore', () => {
         expect(unref).toHaveBeenCalledTimes(1);
       } finally {
         setTimeoutSpy.mockRestore();
-        jest.useFakeTimers();
       }
     });
 
     it('uses a single shared TTL scheduler for multiple entries', () => {
       const setTimeoutSpy = jest.spyOn(global, 'setTimeout');
+
       store.set('/a', entry(), 1000);
       store.set('/b', entry(), 2000);
 
@@ -448,6 +470,7 @@ describe('MemorizeStore', () => {
     it('reprograms the shared TTL scheduler when an earlier entry is added', () => {
       const setTimeoutSpy = jest.spyOn(global, 'setTimeout');
       const clearTimeoutSpy = jest.spyOn(global, 'clearTimeout');
+
       store.set('/later', entry(), 2000);
       store.set('/earlier', entry(), 1000);
 
@@ -460,6 +483,7 @@ describe('MemorizeStore', () => {
     it('does not reprogram when overwriting a non-scheduled entry', () => {
       const setTimeoutSpy = jest.spyOn(global, 'setTimeout');
       const clearTimeoutSpy = jest.spyOn(global, 'clearTimeout');
+
       store.set('/earliest', entry(), 1000);
       store.set('/later', entry('v1'), 2000);
 
@@ -473,6 +497,7 @@ describe('MemorizeStore', () => {
 
     it('does not create a TTL scheduler for Infinity', () => {
       const setTimeoutSpy = jest.spyOn(global, 'setTimeout');
+
       store.set('/users', entry(), Infinity);
       expect(setTimeoutSpy).not.toHaveBeenCalled();
       setTimeoutSpy.mockRestore();
@@ -498,6 +523,7 @@ describe('MemorizeStore', () => {
       jest.setSystemTime(Date.now() + 1000);
 
       const all = store.getAll();
+
       expect(all['/expired']).toBeUndefined();
       expect(all['/alive']).toBeDefined();
     });
@@ -508,6 +534,7 @@ describe('MemorizeStore', () => {
       store.set('/alive', entry(), 5000);
       const setTimeoutSpy = jest.spyOn(global, 'setTimeout');
       const clearTimeoutSpy = jest.spyOn(global, 'clearTimeout');
+
       jest.setSystemTime(Date.now() + 1000);
 
       const all = store.getAll();
@@ -561,6 +588,7 @@ describe('MemorizeStore', () => {
     it('getStats() returns correct shape', () => {
       store.set('/a', entry('x'));
       const stats = store.getStats();
+
       expect(stats.entries).toBe(1);
       expect(stats.maxEntries).toBeNull();
       expect(stats.byteSize).toBeGreaterThan(0);
@@ -568,6 +596,7 @@ describe('MemorizeStore', () => {
 
     it('getStats() reflects maxEntries when configured', () => {
       const s = new MemorizeStore(5);
+
       s.set('/a', entry('x'));
       expect(s.getStats().maxEntries).toBe(5);
     });
@@ -575,6 +604,7 @@ describe('MemorizeStore', () => {
     it('getStats() reflects byte limits when configured', () => {
       const s = new MemorizeStore({ maxValueBytes: 10, maxTotalBytes: 20 });
       const stats = s.getStats();
+
       expect(stats.maxValueBytes).toBe(10);
       expect(stats.maxTotalBytes).toBe(20);
     });
@@ -582,6 +612,7 @@ describe('MemorizeStore', () => {
     it('CacheInfo includes size field', () => {
       store.set('/a', entry('hello'));
       const info = store.get('/a');
+
       expect(info!.size).toBe(Buffer.byteLength('hello'));
     });
 
@@ -612,6 +643,7 @@ describe('MemorizeStore', () => {
 
     it('keeps an existing entry when an oversized replacement is skipped', () => {
       const s = new MemorizeStore({ maxValueBytes: 5 });
+
       s.set('/a', entry('ok'));
 
       s.set('/a', entry('too-large'));
@@ -621,6 +653,7 @@ describe('MemorizeStore', () => {
 
     it('evicts LRU entries until a new entry fits maxTotalBytes', () => {
       const s = new MemorizeStore({ maxTotalBytes: 6 });
+
       s.set('/a', entry('aa'));
       s.set('/b', entry('bb'));
       s.getRaw('/a');
@@ -645,6 +678,7 @@ describe('MemorizeStore', () => {
     it('emits Evict when maxTotalBytes removes an entry', () => {
       const s = new MemorizeStore({ maxTotalBytes: 4 });
       const evicted: string[] = [];
+
       s.on(MemorizeEventType.Evict, (e) => evicted.push(e.key));
       s.set('/a', entry('aa'));
       s.set('/b', entry('bbb'));
@@ -656,6 +690,7 @@ describe('MemorizeStore', () => {
   describe('maxEntries / LRU eviction', () => {
     it('does not evict when below limit', () => {
       const s = new MemorizeStore(3);
+
       s.set('/a', entry());
       s.set('/b', entry());
       expect(s.size()).toBe(2);
@@ -663,6 +698,7 @@ describe('MemorizeStore', () => {
 
     it('evicts the LRU entry when maxEntries is reached', () => {
       const s = new MemorizeStore(2);
+
       s.set('/a', entry());
       s.set('/b', entry());
       s.set('/c', entry()); // /a should be evicted (LRU)
@@ -673,6 +709,7 @@ describe('MemorizeStore', () => {
 
     it('does not exceed maxEntries after multiple sets', () => {
       const s = new MemorizeStore(3);
+
       ['/a', '/b', '/c', '/d', '/e'].forEach((k) => {
         s.set(k, entry());
       });
@@ -681,6 +718,7 @@ describe('MemorizeStore', () => {
 
     it('accessing a key makes it MRU (not evicted first)', () => {
       const s = new MemorizeStore(2);
+
       s.set('/a', entry());
       s.set('/b', entry());
       s.getRaw('/a'); // promote /a to MRU
@@ -692,6 +730,7 @@ describe('MemorizeStore', () => {
 
     it('re-setting an existing key does not evict when at limit', () => {
       const s = new MemorizeStore(2);
+
       s.set('/a', entry());
       s.set('/b', entry());
       s.set('/a', entry('updated')); // overwrite, not a new entry
@@ -702,6 +741,7 @@ describe('MemorizeStore', () => {
     it('does not expire unrelated entries after evicting a scheduled entry', () => {
       jest.useFakeTimers();
       const s = new MemorizeStore(2);
+
       s.set('/a', entry(), 10_000);
       s.set('/b', entry('b'), Infinity);
       s.set('/c', entry()); // evicts /a
@@ -717,6 +757,7 @@ describe('MemorizeStore', () => {
     it('emits Evict event when entry is evicted', () => {
       const s = new MemorizeStore(1);
       const evicted: string[] = [];
+
       s.on(MemorizeEventType.Evict, (e) => evicted.push(e.key));
       s.set('/a', entry());
       s.set('/b', entry()); // evicts /a
@@ -725,9 +766,11 @@ describe('MemorizeStore', () => {
 
     it('byteSize stays consistent after LRU eviction', () => {
       const s = new MemorizeStore(2);
+
       s.set('/a', entry('aaaa'));
       s.set('/b', entry('bb'));
       const beforeEviction = s.byteSize();
+
       s.set('/c', entry('ccc')); // evicts /a
       expect(s.byteSize()).toBe(
         beforeEviction - Buffer.byteLength('aaaa') + Buffer.byteLength('ccc'),

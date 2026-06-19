@@ -80,12 +80,15 @@ const metadataFallback = new WeakMap<MetadataTarget, Map<string, unknown>>();
 
 function setMetadata(key: string, value: unknown, target: MetadataTarget): void {
   const reflect = Reflect as MetadataReflect;
+
   if (reflect.defineMetadata) {
     reflect.defineMetadata(key, value, target);
+
     return;
   }
 
   const existing = metadataFallback.get(target) ?? new Map<string, unknown>();
+
   existing.set(key, value);
   metadataFallback.set(target, existing);
 }
@@ -95,6 +98,7 @@ function getOwnMetadata<T>(key: string, target: MetadataTarget): T | undefined {
   const value = reflect.getMetadata
     ? reflect.getMetadata(key, target)
     : metadataFallback.get(target)?.get(key);
+
   return value as T | undefined;
 }
 
@@ -115,6 +119,7 @@ function setCacheHeader(
   if (!response || response.headersSent) {
     return;
   }
+
   if (response.setHeader) {
     response.setHeader('X-Cache', value);
   } else if (response.header) {
@@ -130,6 +135,7 @@ function parseCachedBody(body: unknown): unknown {
   if (typeof body !== 'string') {
     return body;
   }
+
   try {
     return JSON.parse(body);
   } catch {
@@ -147,11 +153,13 @@ function toObservable<T>(value: T): MemorizeNestObservable<T> {
       if (typeof observerOrNext === 'function') {
         observerOrNext(value);
         complete?.();
+
         return { unsubscribe() {} };
       }
 
       observerOrNext?.next?.(value);
       observerOrNext?.complete?.();
+
       return { unsubscribe() {} };
     },
   };
@@ -165,6 +173,7 @@ function normalizeObserver<T>(
   if (typeof observerOrNext === 'function') {
     return { next: observerOrNext, error, complete };
   }
+
   return observerOrNext ?? {};
 }
 
@@ -179,6 +188,7 @@ function cacheObservable<T>(
       complete?: () => void,
     ) {
       const observer = normalizeObserver(observerOrNext, error, complete);
+
       let hasValue = false;
       let latestValue: T;
 
@@ -195,6 +205,7 @@ function cacheObservable<T>(
           if (hasValue) {
             onCompleteValue(latestValue);
           }
+
           observer.complete?.();
         },
       });
@@ -248,8 +259,10 @@ export class MemorizeInterceptor {
     }
 
     const noCache = getMetadata<boolean>(NO_CACHE_METADATA, context);
+
     if (noCache) {
       setCacheHeader(response, 'BYPASS');
+
       return next.handle();
     }
 
@@ -260,14 +273,17 @@ export class MemorizeInterceptor {
 
     if (cached) {
       setCacheHeader(response, 'HIT');
+
       return toObservable(parseCachedBody(cached.body));
     }
 
     setCacheHeader(response, 'MISS');
+
     return cacheObservable(next.handle(), (value) => {
       if (value === undefined || response.headersSent) {
         return;
       }
+
       this.cache._store.set(
         key,
         { body: value, statusCode: 200, contentType: 'application/json' },

@@ -58,12 +58,14 @@ export function createKoaMiddleware(cache: Memorize, options?: KoaAdapterOptions
   return async function memorizeKoaMiddleware(ctx: Context, next): Promise<void> {
     if (ctx.method !== 'GET') {
       await next();
+
       return;
     }
 
     if (options?.noCache) {
       ctx.set('X-Cache', 'BYPASS');
       await next();
+
       return;
     }
 
@@ -75,6 +77,7 @@ export function createKoaMiddleware(cache: Memorize, options?: KoaAdapterOptions
       ctx.status = cached.statusCode;
       ctx.type = cached.contentType;
       ctx.body = cached.body;
+
       return;
     }
 
@@ -82,6 +85,7 @@ export function createKoaMiddleware(cache: Memorize, options?: KoaAdapterOptions
 
     if (ctx.status >= 200 && ctx.status < 300) {
       const contentType = ctx.response.type || inferContentType(ctx.body);
+
       cache._store.set(
         key,
         { body: ctx.body, statusCode: ctx.status, contentType },

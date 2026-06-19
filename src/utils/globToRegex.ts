@@ -11,11 +11,14 @@
 export function globToRegex(pattern: string): RegExp {
   let result = '^';
   let i = 0;
+
   while (i < pattern.length) {
     const ch = pattern[i];
+
     if (ch === '*' && pattern[i + 1] === '*') {
       result += '.*';
       i += 2;
+
       if (pattern[i] === '/') {
         i++;
       }
@@ -30,6 +33,8 @@ export function globToRegex(pattern: string): RegExp {
       i++;
     }
   }
+
   result += '$';
+
   return new RegExp(result);
 }

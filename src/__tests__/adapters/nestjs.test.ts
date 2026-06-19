@@ -12,6 +12,7 @@ function observableOf<T>(value: T) {
     subscribe(observer: { next?: (value: T) => void; complete?: () => void }) {
       observer.next?.(value);
       observer.complete?.();
+
       return { unsubscribe() {} };
     },
   };
@@ -53,11 +54,13 @@ function subscribe<T>(source: {
   subscribe: (observer: { next?: (value: T) => void; complete?: () => void }) => unknown;
 }) {
   let result: T | undefined;
+
   source.subscribe({
     next: (value) => {
       result = value;
     },
   });
+
   return result;
 }
 
@@ -66,7 +69,6 @@ describe('NestJS adapter', () => {
     const cache = memorize();
     const interceptor = new MemorizeInterceptor(cache);
     const { context, headers } = createContext();
-
     const result = subscribe(
       interceptor.intercept(context, { handle: () => observableOf({ data: [] }) }),
     );
@@ -95,6 +97,7 @@ describe('NestJS adapter', () => {
     const cache = memorize();
     const interceptor = new MemorizeInterceptor(cache);
     const handler = function handler() {};
+
     MemorizeTtl(500)(handler);
     const { context } = createContext({ handler });
 
@@ -109,6 +112,7 @@ describe('NestJS adapter', () => {
     const cache = memorize();
     const interceptor = new MemorizeInterceptor(cache);
     const handler = function handler() {};
+
     MemorizeCacheKey('users:list')(handler);
     const { context } = createContext({ handler });
 
@@ -134,6 +138,7 @@ describe('NestJS adapter', () => {
     const cache = memorize();
     const interceptor = new MemorizeInterceptor(cache);
     const handler = function handler() {};
+
     MemorizeNoCache()(handler);
     const { context, headers } = createContext({ handler });
 

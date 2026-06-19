@@ -44,8 +44,10 @@ export function createHonoMiddleware(
     if (options?.noCache) {
       await next();
       const headers = new Headers(c.res.headers);
+
       headers.set('X-Cache', 'BYPASS');
       c.res = new Response(c.res.body, { status: c.res.status, headers });
+
       return;
     }
 
@@ -70,9 +72,11 @@ export function createHonoMiddleware(
     if (status >= 200 && status < 300) {
       const body = await c.res.clone().text();
       const contentType = c.res.headers.get('Content-Type') ?? 'application/octet-stream';
+
       cache._store.set(key, { body, statusCode: status, contentType }, options?.ttl);
 
       const headers = new Headers(c.res.headers);
+
       headers.set('X-Cache', 'MISS');
       c.res = new Response(body, { status, headers });
     }

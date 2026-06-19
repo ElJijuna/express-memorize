@@ -14,6 +14,7 @@ describe('createSerializer', () => {
 
     it('round-trips objects and arrays', () => {
       const obj = { a: 1, b: [2, 3] };
+
       expect(s.deserialize(s.serialize(obj))).toEqual(obj);
     });
 
@@ -32,20 +33,24 @@ describe('createSerializer', () => {
 
     it('round-trips types unsupported by JSON', () => {
       const date = new Date('2024-01-01');
+
       expect((s.deserialize(s.serialize(date)) as Date).getTime()).toBe(date.getTime());
 
       const map = new Map([['k', 'v']]);
       const roundTrippedMap = s.deserialize(s.serialize(map)) as Map<string, string>;
+
       expect(roundTrippedMap.get('k')).toBe('v');
       expect(roundTrippedMap.size).toBe(1);
 
       const set = new Set([1, 2, 3]);
       const roundTrippedSet = s.deserialize(s.serialize(set)) as Set<number>;
+
       expect(roundTrippedSet.has(1)).toBe(true);
       expect(roundTrippedSet.has(3)).toBe(true);
       expect(roundTrippedSet.size).toBe(3);
 
       const buf = Buffer.from('binary data');
+
       expect(s.deserialize(s.serialize(buf))).toEqual(buf);
     });
 
@@ -62,6 +67,7 @@ describe('createSerializer', () => {
     it('returns a working serializer (v8 available in Node)', () => {
       const s = createSerializer('auto');
       const obj = { a: 1 };
+
       expect(s.deserialize(s.serialize(obj))).toEqual(obj);
     });
   });
@@ -69,6 +75,7 @@ describe('createSerializer', () => {
   describe('default (no arg)', () => {
     it('behaves like auto', () => {
       const s = createSerializer();
+
       expect(s.deserialize(s.serialize(99))).toBe(99);
     });
   });
@@ -78,7 +85,6 @@ describe('createSerializer', () => {
       const serialize = jest.fn((v: unknown) => JSON.stringify(v));
       const deserialize = jest.fn((d: string | Buffer) => JSON.parse(d as string));
       const custom: Serializer = { serialize, deserialize };
-
       const s = createSerializer(custom);
       const result = s.deserialize(s.serialize({ x: 42 }));
 
@@ -95,6 +101,7 @@ describe('memorize() with serializer option', () => {
 
   it('json: set/getValue round-trip', () => {
     const cache = memorize({ serializer: 'json', ttl: Infinity });
+
     cache.set('k', { hello: 'world' });
     expect(cache.getValue('k')).toEqual({ hello: 'world' });
   });
@@ -102,12 +109,14 @@ describe('memorize() with serializer option', () => {
   it('v8: set/getValue round-trip with Date', () => {
     const cache = memorize({ serializer: 'v8', ttl: Infinity });
     const date = new Date('2024-06-01');
+
     cache.set('date', date);
     expect(cache.getValue<Date>('date')?.getTime()).toBe(date.getTime());
   });
 
   it('auto: set/getValue round-trip', () => {
     const cache = memorize({ serializer: 'auto', ttl: Infinity });
+
     cache.set('x', [1, 2, 3]);
     expect(cache.getValue('x')).toEqual([1, 2, 3]);
   });
