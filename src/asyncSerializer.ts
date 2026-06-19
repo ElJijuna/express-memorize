@@ -137,10 +137,10 @@ export class WorkerAsyncSerializer {
     this.workerCount = normalizeWorkerCount(workers);
   }
 
-  serialize(value: unknown): Promise<string | Buffer> {
-    return this._request({ id: 0, action: 'serialize', serializer: this._serializer, value }).then(
-      normalizeWorkerResult,
-    );
+  async serialize(value: unknown): Promise<string | Buffer> {
+    const result = await this._request({ id: 0, action: 'serialize', serializer: this._serializer, value });
+
+    return normalizeWorkerResult(result);
   }
 
   deserialize(data: string | Buffer): Promise<unknown> {

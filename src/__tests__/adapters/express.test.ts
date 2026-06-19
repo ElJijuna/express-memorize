@@ -1,10 +1,10 @@
-import type { NextFunction, Request } from 'express';
+import type { NextFunction, Request, Response } from 'express';
 import { createExpressAdapter } from '../../adapters/express';
 import { memorize } from '../../memorize';
 
 function createMockReqRes(url = '/users', method = 'GET') {
   const responseHeaders: Record<string, string> = {};
-  const res: any = {
+  const res = {
     statusCode: 200,
     status(code: number) {
       this.statusCode = code;
@@ -20,14 +20,12 @@ function createMockReqRes(url = '/users', method = 'GET') {
       return responseHeaders[name];
     },
     send: jest.fn().mockReturnThis(),
-  };
+    json(body: unknown) {
+      this.setHeader('Content-Type', 'application/json; charset=utf-8');
 
-  res.json = (body: unknown) => {
-    res.setHeader('Content-Type', 'application/json; charset=utf-8');
-
-    return res.send(JSON.stringify(body));
-  };
-
+      return this.send(JSON.stringify(body));
+    },
+  } as unknown as Response;
   const req = { originalUrl: url, method } as unknown as Request;
   const next = jest.fn() as unknown as NextFunction;
 
@@ -41,7 +39,7 @@ describe('createExpressAdapter (express-memorize/express)', () => {
     const { req, res, next, responseHeaders } = createMockReqRes();
 
     handler(req, res, next);
-    (res as any).json({ data: [] });
+    res.json({ data: [] });
     expect(responseHeaders['X-Cache']).toBe('MISS');
   });
 
@@ -51,7 +49,7 @@ describe('createExpressAdapter (express-memorize/express)', () => {
     const { req, res, next } = createMockReqRes();
 
     handler(req, res, next);
-    (res as any).json({ data: [] });
+    res.json({ data: [] });
 
     const { req: req2, res: res2, next: next2, responseHeaders: h2 } = createMockReqRes();
 
@@ -66,7 +64,7 @@ describe('createExpressAdapter (express-memorize/express)', () => {
     const { req, res, next } = createMockReqRes('/ping');
 
     cache.express()(req, res, next);
-    (res as any).json({ ok: true });
+    res.json({ ok: true });
 
     // Hit via createExpressAdapter
     const { req: req2, res: res2, next: next2, responseHeaders: h2 } = createMockReqRes('/ping');
@@ -83,7 +81,7 @@ describe('createExpressAdapter (express-memorize/express)', () => {
     const { req, res, next } = createMockReqRes();
 
     handler(req, res, next);
-    (res as any).json({ ok: true });
+    res.json({ ok: true });
 
     jest.advanceTimersByTime(600);
     expect(cache.get('/users')).toBeNull();
