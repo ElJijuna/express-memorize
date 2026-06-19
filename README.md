@@ -1,6 +1,10 @@
 # express-memorize
 
 <p align="center">
+  <img src="https://raw.githubusercontent.com/ElJijuna/express-memorize/main/public/assets/logo.svg" alt="express-memorize logo" width="200" />
+</p>
+
+<p align="center">
   <a href="https://www.npmjs.com/package/express-memorize"><img src="https://img.shields.io/npm/v/express-memorize?color=blue&label=npm" alt="npm version" /></a>
   <a href="https://www.npmjs.com/package/express-memorize"><img src="https://img.shields.io/npm/dm/express-memorize?color=blue" alt="npm downloads" /></a>
   <a href="https://github.com/ElJijuna/express-memorize/actions"><img src="https://github.com/ElJijuna/express-memorize/actions/workflows/publish.yml/badge.svg" alt="CI" /></a>
