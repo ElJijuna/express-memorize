@@ -1,29 +1,6 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.4.16/schema.json",
-  "extends": ["super-configs/biome"],
-  "overrides": [
-    {
-      "includes": ["src/__tests__/**/*.ts"],
-      "linter": {
-        "rules": {
-          "style": {
-            "noNonNullAssertion": "off"
-          },
-          "suspicious": {
-            "noExplicitAny": "off"
-          }
-        }
-      }
-    },
-    {
-      "includes": ["src/adapters/nestjs.ts"],
-      "linter": {
-        "rules": {
-          "complexity": {
-            "noStaticOnlyClass": "off"
-          }
-        }
-      }
-    }
+  "extends": [
+    "super-configs/biome"
   ]
 }
