@@ -1,4 +1,3 @@
-import { setImmediate as timerSetImmediate } from 'node:timers';
 import { createExpressMiddleware } from './adapters/express';
 import { createWorkerAsyncSerializer } from './asyncSerializer';
 import type { Memorize } from './domain/Memorize';
@@ -6,38 +5,12 @@ import type { MemorizeCallOptions } from './domain/MemorizeCallOptions';
 import type { MemorizeOptions } from './domain/MemorizeOptions';
 import { MemorizeStore } from './MemorizeStore';
 import { createSerializer } from './serializer';
+import { estimateByteSize, serializedByteSize } from './utils/byteSize';
+import { yieldToEventLoop } from './utils/eventLoop';
 
 export type { Serializer, SerializerOption } from './serializer';
 
 export type { Memorize, MemorizeCallOptions, MemorizeOptions };
-
-function serializedByteSize(body: string | Buffer): number {
-  return Buffer.isBuffer(body) ? body.byteLength : Buffer.byteLength(body);
-}
-
-function estimateAsyncInputSize(value: unknown): number {
-  if (typeof value === 'string') {
-    return Buffer.byteLength(value);
-  }
-
-  if (Buffer.isBuffer(value)) {
-    return value.byteLength;
-  }
-
-  if (value instanceof ArrayBuffer) {
-    return value.byteLength;
-  }
-
-  if (ArrayBuffer.isView(value)) {
-    return (value as ArrayBufferView).byteLength;
-  }
-
-  try {
-    return Buffer.byteLength(JSON.stringify(value) ?? '');
-  } catch {
-    return Number.POSITIVE_INFINITY;
-  }
-}
 
 function normalizeAsyncSerializerThreshold(value: number | undefined): number {
   if (value === undefined) {
@@ -49,10 +22,6 @@ function normalizeAsyncSerializerThreshold(value: number | undefined): number {
   }
 
   return value;
-}
-
-function yieldToEventLoop(): Promise<void> {
-  return new Promise((resolve) => (globalThis.setImmediate ?? timerSetImmediate)(resolve));
 }
 
 function nextVersion(versions: Map<string, number>, key: string): number {
@@ -160,7 +129,7 @@ export function memorize(options: MemorizeOptions = {}): Memorize {
 
     await yieldToEventLoop();
 
-    if (!workerSerializer || estimateAsyncInputSize(value) < workerThresholdBytes) {
+    if (!workerSerializer || estimateByteSize(value, Number.POSITIVE_INFINITY) < workerThresholdBytes) {
       if (keyVersions.get(key) !== version || mutationEpoch !== epoch) {
         return;
       }

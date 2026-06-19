@@ -1,6 +1,5 @@
 import {
   clearTimeout as timerClearTimeout,
-  setImmediate as timerSetImmediate,
   setTimeout as timerSetTimeout,
 } from 'node:timers';
 import type { CacheEntry } from './domain/CacheEntry';
@@ -14,6 +13,8 @@ import type { MemorizeEvictEvent } from './domain/MemorizeEvictEvent';
 import type { MemorizeExpireEvent } from './domain/MemorizeExpireEvent';
 import type { MemorizeSetEvent } from './domain/MemorizeSetEvent';
 import type { MemorizeStats } from './domain/MemorizeStats';
+import { estimateByteSize } from './utils/byteSize';
+import { yieldToEventLoop } from './utils/eventLoop';
 import { globToRegex } from './utils/globToRegex';
 
 export type {
@@ -50,30 +51,6 @@ type StoreEntryInput = Omit<CacheEntry, 'expiresAt' | 'hits' | 'size'> & {
 
 const DEFAULT_TTL = 60_000;
 const DEFAULT_BATCH_SIZE = 1_000;
-
-function estimateByteSize(value: unknown): number {
-  if (typeof value === 'string') {
-    return Buffer.byteLength(value);
-  }
-
-  if (Buffer.isBuffer(value)) {
-    return value.byteLength;
-  }
-
-  if (value instanceof ArrayBuffer) {
-    return value.byteLength;
-  }
-
-  if (ArrayBuffer.isView(value)) {
-    return (value as ArrayBufferView).byteLength;
-  }
-
-  try {
-    return Buffer.byteLength(JSON.stringify(value) ?? '');
-  } catch {
-    return 0;
-  }
-}
 
 function normalizeTtl(ttl?: number | null): { expiresAt: number | null } {
   if (ttl === Infinity) {
@@ -117,10 +94,6 @@ function normalizeByteLimit(name: string, value: number | undefined): number | u
   }
 
   return value;
-}
-
-function yieldToEventLoop(): Promise<void> {
-  return new Promise((resolve) => (globalThis.setImmediate ?? timerSetImmediate)(resolve));
 }
 
 /**
