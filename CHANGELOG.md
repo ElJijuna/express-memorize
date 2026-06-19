@@ -1,3 +1,12 @@
+# [2.6.0](https://github.com/ElJijuna/express-memorize/compare/v2.5.1...v2.6.0) (2026-06-19)
+
+
+### Features
+
+* enhance serializer tests and improve cache handling in various adapters ([dd9feb9](https://github.com/ElJijuna/express-memorize/commit/dd9feb956c9e0fc3de3bcc5d54b6222b405f1027))
+* refactor async cache and event loop benchmarks; improve error handling and code structure ([7be2242](https://github.com/ElJijuna/express-memorize/commit/7be22420d0a809f8573b0711ade4f0010828dbd3))
+* refactor byte size estimation and event loop handling; remove redundant functions ([57139b9](https://github.com/ElJijuna/express-memorize/commit/57139b9b94dbfd594d2de6ac2045819daf5ea128))
+
 ## [2.5.1](https://github.com/ElJijuna/express-memorize/compare/v2.5.0...v2.5.1) (2026-06-07)
 
 
