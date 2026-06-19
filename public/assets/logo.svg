@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <defs>
+    <linearGradient id="brainGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="boltGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#f093fb;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#f5576c;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="cacheGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#4facfe;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#00f2fe;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Cerebro estilizado (memoria) -->
+  <g transform="translate(100, 90)">
+    <!-- Hemisferio izquierdo -->
+    <path d="M -35,-25 C -45,-25 -50,-15 -50,-5 C -50,5 -45,15 -35,18 C -35,28 -25,35 -15,35 C -10,35 -5,33 -2,30 L -2,-25 C -2,-25 -15,-25 -35,-25 Z" 
+          fill="url(#brainGrad)" opacity="0.9"/>
+    <!-- Hemisferio derecho -->
+    <path d="M 35,-25 C 45,-25 50,-15 50,-5 C 50,5 45,15 35,18 C 35,28 25,35 15,35 C 10,35 5,33 2,30 L 2,-25 C 2,-25 15,-25 35,-25 Z" 
+          fill="url(#brainGrad)" opacity="0.9"/>
+    <!-- Surcos cerebrales -->
+    <path d="M -25,-15 Q -20,-10 -25,-5" stroke="#fff" stroke-width="2" fill="none" opacity="0.6"/>
+    <path d="M -30,0 Q -25,5 -30,10" stroke="#fff" stroke-width="2" fill="none" opacity="0.6"/>
+    <path d="M 25,-15 Q 20,-10 25,-5" stroke="#fff" stroke-width="2" fill="none" opacity="0.6"/>
+    <path d="M 30,0 Q 25,5 30,10" stroke="#fff" stroke-width="2" fill="none" opacity="0.6"/>
+  </g>
+  
+  <!-- Rayo (velocidad/Express) -->
+  <path d="M 100,45 L 85,85 L 95,85 L 80,125 L 115,80 L 105,80 L 120,45 Z" 
+        fill="url(#boltGrad)" opacity="0.95"/>
+  
+  <!-- Capas de caché (almacenamiento) -->
+  <g transform="translate(100, 155)">
+    <ellipse cx="0" cy="0" rx="40" ry="8" fill="url(#cacheGrad)" opacity="0.7"/>
+    <ellipse cx="0" cy="-8" rx="40" ry="8" fill="url(#cacheGrad)" opacity="0.8"/>
+    <ellipse cx="0" cy="-16" rx="40" ry="8" fill="url(#cacheGrad)" opacity="0.9"/>
+    <path d="M -40,-16 L -40,0 A 40,8 0 0,0 40,0 L 40,-16" fill="url(#cacheGrad)" opacity="0.5"/>
+  </g>
+  
+  <!-- Texto -->
+  <text x="100" y="185" font-family="Arial, sans-serif" font-size="11" font-weight="bold" 
+        fill="#667eea" text-anchor="middle" letter-spacing="1">EXPRESS-MEMORIZE</text>
+</svg>
