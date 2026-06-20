@@ -112,8 +112,6 @@ describe('Fastify adapter — noCache', () => {
 });
 
 describe('Fastify adapter — TTL', () => {
-  afterEach(() => jest.useRealTimers());
-
   it('respects global TTL from memorize options', async () => {
     const cache = memorize({ ttl: 500 });
     const app = buildApp(cache);
@@ -123,8 +121,13 @@ describe('Fastify adapter — TTL', () => {
 
     expect(cached).not.toBeNull();
 
-    jest.useFakeTimers({ now: cached!.expiresAt! + 1 });
-    expect(cache.get('/users')).toBeNull();
+    const mockNow = jest.spyOn(Date, 'now').mockReturnValue(cached!.expiresAt! + 1);
+
+    try {
+      expect(cache.get('/users')).toBeNull();
+    } finally {
+      mockNow.mockRestore();
+    }
   });
 
   it('respects per-route TTL', async () => {
@@ -136,11 +139,16 @@ describe('Fastify adapter — TTL', () => {
 
     expect(cached).not.toBeNull();
 
-    jest.useFakeTimers({ now: cached!.expiresAt! - 1 });
-    expect(cache.get('/users')).not.toBeNull();
+    const mockNow = jest.spyOn(Date, 'now').mockReturnValue(cached!.expiresAt! - 1);
 
-    jest.setSystemTime(cached!.expiresAt! + 1);
-    expect(cache.get('/users')).toBeNull();
+    try {
+      expect(cache.get('/users')).not.toBeNull();
+
+      mockNow.mockReturnValue(cached!.expiresAt! + 1);
+      expect(cache.get('/users')).toBeNull();
+    } finally {
+      mockNow.mockRestore();
+    }
   });
 });
 
