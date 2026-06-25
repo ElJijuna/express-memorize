@@ -1,3 +1,10 @@
+# [2.7.0](https://github.com/ElJijuna/express-memorize/compare/v2.6.0...v2.7.0) (2026-06-25)
+
+
+### Features
+
+* implement createCacheKey and deleteMatching functionality with array support and exact match option ([c4b7daa](https://github.com/ElJijuna/express-memorize/commit/c4b7daa8fca216eca99c10b57d2f95a54db011a2))
+
 # [2.6.0](https://github.com/ElJijuna/express-memorize/compare/v2.5.1...v2.6.0) (2026-06-19)
 
 
