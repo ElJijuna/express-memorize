@@ -3,6 +3,12 @@ import type { MemorizeStore } from '../MemorizeStore';
 import type { CacheInfo } from './CacheInfo';
 import type { MemorizeBatchOptions } from './MemorizeBatchOptions';
 import type { MemorizeCallOptions } from './MemorizeCallOptions';
+
+export interface DeleteMatchingOptions {
+  /** When `true`, only the exact key is deleted (no child keys). Default `false`. */
+  exactMatch?: boolean;
+}
+
 import type { MemorizeDeleteEvent } from './MemorizeDeleteEvent';
 import type { MemorizeEmptyEvent } from './MemorizeEmptyEvent';
 import type { MemorizeEventType } from './MemorizeEventType';
@@ -225,7 +231,7 @@ export interface Memorize {
    * });
    * ```
    */
-  deleteMatching(pattern: string): number;
+  deleteMatching(pattern: string | Array<unknown>, options?: DeleteMatchingOptions): number;
 
   /**
    * Async variant of {@link deleteMatching}. It removes matching entries in
@@ -241,7 +247,10 @@ export interface Memorize {
    * await cache.deleteMatchingAsync('/api/users/*', { batchSize: 500 });
    * ```
    */
-  deleteMatchingAsync(pattern: string, options?: MemorizeBatchOptions): Promise<number>;
+  deleteMatchingAsync(
+    pattern: string | Array<unknown>,
+    options?: DeleteMatchingOptions & MemorizeBatchOptions,
+  ): Promise<number>;
 
   /**
    * Removes **all** entries from the cache and emits a {@link MemorizeEventType.Delete}

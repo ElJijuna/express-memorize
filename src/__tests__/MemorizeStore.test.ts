@@ -41,7 +41,7 @@ describe('MemorizeStore', () => {
     it('uses a finite default TTL when no TTL is set', () => {
       jest.useFakeTimers();
       store.set('/users', entry());
-      const {remainingTtl} = (store.get('/users')!);
+      const { remainingTtl } = store.get('/users')!;
 
       expect(remainingTtl).not.toBeNull();
       expect(remainingTtl).toBeGreaterThan(0);

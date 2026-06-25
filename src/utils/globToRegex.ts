@@ -15,7 +15,10 @@ export function globToRegex(pattern: string): RegExp {
   while (i < pattern.length) {
     const ch = pattern[i];
 
-    if (ch === '*' && pattern[i + 1] === '*') {
+    if (ch === '\\' && (pattern[i + 1] === '*' || pattern[i + 1] === '?')) {
+      result += '\\' + pattern[i + 1];
+      i += 2;
+    } else if (ch === '*' && pattern[i + 1] === '*') {
       result += '.*';
       i += 2;
 

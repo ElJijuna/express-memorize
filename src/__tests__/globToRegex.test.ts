@@ -1,3 +1,4 @@
+import { createCacheKey } from '../utils/createCacheKey';
 import { globToRegex } from '../utils/globToRegex';
 
 describe('globToRegex', () => {
@@ -66,6 +67,31 @@ describe('globToRegex', () => {
 
       expect(re.test('/users/abc.123')).toBe(true);
       expect(re.test('/users/abcX123')).toBe(false);
+    });
+  });
+
+  describe('escape sequences', () => {
+    it('\\* matches a literal * not a wildcard', () => {
+      const re = globToRegex('a\\*b');
+
+      expect(re.test('a*b')).toBe(true);
+      expect(re.test('axb')).toBe(false);
+      expect(re.test('aXYZb')).toBe(false);
+    });
+
+    it('\\? matches a literal ? not a single-char wildcard', () => {
+      const re = globToRegex('a\\?b');
+
+      expect(re.test('a?b')).toBe(true);
+      expect(re.test('axb')).toBe(false);
+    });
+
+    it('round-trips with createCacheKey: escaped key matches only exact value', () => {
+      const key = createCacheKey('a*b');
+      const pattern = globToRegex(key);
+
+      expect(pattern.test('a*b')).toBe(true);
+      expect(pattern.test('axb')).toBe(false);
     });
   });
 });

@@ -1011,4 +1011,82 @@ describe('memorize middleware', () => {
       expect(cache.getValue('/c')).toBe('cc');
     });
   });
+
+  describe('deleteMatching array form', () => {
+    it('removes the exact key matching the array parts', () => {
+      const cache = memorize();
+
+      cache.set('users:21', 'alice');
+      cache.set('users:42', 'bob');
+
+      cache.deleteMatching(['users', 21]);
+
+      expect(cache.getValue('users:21')).toBeUndefined();
+    });
+
+    it('cascades to remove sub-keys (exactMatch: false by default)', () => {
+      const cache = memorize();
+
+      cache.set('users:21', 'alice');
+      cache.set('users:21:posts', 'posts');
+      cache.set('users:21:settings', 'settings');
+
+      cache.deleteMatching(['users', 21]);
+
+      expect(cache.getValue('users:21:posts')).toBeUndefined();
+      expect(cache.getValue('users:21:settings')).toBeUndefined();
+    });
+
+    it('does not remove unrelated keys', () => {
+      const cache = memorize();
+
+      cache.set('users:21', 'alice');
+      cache.set('users:42', 'bob');
+      cache.set('users', 'all');
+
+      cache.deleteMatching(['users', 21]);
+
+      expect(cache.getValue('users:42')).toBe('bob');
+      expect(cache.getValue('users')).toBe('all');
+    });
+
+    it('with exactMatch: true removes only the exact key', () => {
+      const cache = memorize();
+
+      cache.set('users:21', 'alice');
+      cache.set('users:21:posts', 'posts');
+
+      cache.deleteMatching(['users', 21], { exactMatch: true });
+
+      expect(cache.getValue('users:21')).toBeUndefined();
+      expect(cache.getValue('users:21:posts')).toBe('posts');
+    });
+
+    it('returns count of removed entries', () => {
+      const cache = memorize();
+
+      cache.set('users:21', 'alice');
+      cache.set('users:21:posts', 'posts');
+      cache.set('users:42', 'bob');
+
+      const count = cache.deleteMatching(['users', 21]);
+
+      expect(count).toBe(2);
+    });
+
+    it('deleteMatchingAsync array form cascades and returns count', async () => {
+      const cache = memorize();
+
+      cache.set('users:21', 'alice');
+      cache.set('users:21:posts', 'posts');
+      cache.set('users:42', 'bob');
+
+      const count = await cache.deleteMatchingAsync(['users', 21]);
+
+      expect(count).toBe(2);
+      expect(cache.getValue('users:21')).toBeUndefined();
+      expect(cache.getValue('users:21:posts')).toBeUndefined();
+      expect(cache.getValue('users:42')).toBe('bob');
+    });
+  });
 });

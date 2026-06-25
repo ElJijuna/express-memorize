@@ -1,7 +1,4 @@
-import {
-  clearTimeout as timerClearTimeout,
-  setTimeout as timerSetTimeout,
-} from 'node:timers';
+import { clearTimeout as timerClearTimeout, setTimeout as timerSetTimeout } from 'node:timers';
 import type { CacheEntry } from './domain/CacheEntry';
 import type { CacheInfo } from './domain/CacheInfo';
 import type { MemorizeBatchOptions } from './domain/MemorizeBatchOptions';

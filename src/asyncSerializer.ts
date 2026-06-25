@@ -138,7 +138,12 @@ export class WorkerAsyncSerializer {
   }
 
   async serialize(value: unknown): Promise<string | Buffer> {
-    const result = await this._request({ id: 0, action: 'serialize', serializer: this._serializer, value });
+    const result = await this._request({
+      id: 0,
+      action: 'serialize',
+      serializer: this._serializer,
+      value,
+    });
 
     return normalizeWorkerResult(result);
   }

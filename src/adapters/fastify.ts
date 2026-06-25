@@ -119,7 +119,7 @@ export function createFastifyPreHandler(
     const originalSend = reply.send.bind(reply) as (payload?: unknown) => FastifyReply;
 
     reply.send = function sendWithCache(payload?: unknown): FastifyReply {
-      const {statusCode} = reply;
+      const { statusCode } = reply;
 
       if (statusCode >= 200 && statusCode < 300) {
         const ttl = options?.ttl ?? cache._ttl;

@@ -1,12 +1,21 @@
 import { createExpressMiddleware } from './adapters/express';
 import { createWorkerAsyncSerializer } from './asyncSerializer';
-import type { Memorize } from './domain/Memorize';
+import type { DeleteMatchingOptions, Memorize } from './domain/Memorize';
 import type { MemorizeCallOptions } from './domain/MemorizeCallOptions';
 import type { MemorizeOptions } from './domain/MemorizeOptions';
 import { MemorizeStore } from './MemorizeStore';
 import { createSerializer } from './serializer';
 import { estimateByteSize, serializedByteSize } from './utils/byteSize';
+import { DEFAULT_SEPARATOR } from './utils/createCacheKey';
 import { yieldToEventLoop } from './utils/eventLoop';
+
+function resolvePattern(pattern: string | Array<unknown>): string {
+  if (!Array.isArray(pattern)) {
+    return pattern;
+  }
+
+  return pattern.map((p) => String(p ?? '')).join(DEFAULT_SEPARATOR);
+}
 
 export type { Serializer, SerializerOption } from './serializer';
 
@@ -129,7 +138,10 @@ export function memorize(options: MemorizeOptions = {}): Memorize {
 
     await yieldToEventLoop();
 
-    if (!workerSerializer || estimateByteSize(value, Number.POSITIVE_INFINITY) < workerThresholdBytes) {
+    if (
+      !workerSerializer ||
+      estimateByteSize(value, Number.POSITIVE_INFINITY) < workerThresholdBytes
+    ) {
       if (keyVersions.get(key) !== version || mutationEpoch !== epoch) {
         return;
       }
@@ -294,16 +306,49 @@ export function memorize(options: MemorizeOptions = {}): Memorize {
     return store.delete(key);
   };
 
-  cache.deleteMatching = (pattern: string) => {
+  cache.deleteMatching = (pattern: string | Array<unknown>, options?: DeleteMatchingOptions) => {
     mutationEpoch++;
 
-    return store.deleteMatching(pattern);
+    if (!Array.isArray(pattern)) {
+      return store.deleteMatching(pattern);
+    }
+
+    const resolved = resolvePattern(pattern);
+
+    if (options?.exactMatch) {
+      return store.delete(resolved) ? 1 : 0;
+    }
+
+    const rootCount = store.delete(resolved) ? 1 : 0;
+
+    return rootCount + store.deleteMatching(resolved + DEFAULT_SEPARATOR + '*');
   };
 
-  cache.deleteMatchingAsync = (pattern, batchOptions) => {
+  cache.deleteMatchingAsync = async (
+    pattern: string | Array<unknown>,
+    options?: DeleteMatchingOptions & { batchSize?: number },
+  ) => {
     mutationEpoch++;
 
-    return store.deleteMatchingAsync(pattern, batchOptions);
+    const { exactMatch, ...batchOptions } = options ?? {};
+
+    if (!Array.isArray(pattern)) {
+      return store.deleteMatchingAsync(pattern, batchOptions);
+    }
+
+    const resolved = resolvePattern(pattern);
+
+    if (exactMatch) {
+      return store.delete(resolved) ? 1 : 0;
+    }
+
+    const rootCount = store.delete(resolved) ? 1 : 0;
+    const childCount = await store.deleteMatchingAsync(
+      resolved + DEFAULT_SEPARATOR + '*',
+      batchOptions,
+    );
+
+    return rootCount + childCount;
   };
 
   cache.clear = () => {
