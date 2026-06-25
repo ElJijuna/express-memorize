@@ -92,7 +92,10 @@ describe('Fastify adapter — cache HIT (subsequent requests)', () => {
     await app.inject('/users');
     await app.inject('/users');
     await app.inject('/users');
-    expect(cache.get('/users')!.hits).toBe(3);
+    const hitEntry = cache.get('/users');
+
+    expect(hitEntry).not.toBeNull();
+    expect(hitEntry?.hits).toBe(3);
   });
 });
 
@@ -121,7 +124,11 @@ describe('Fastify adapter — TTL', () => {
 
     expect(cached).not.toBeNull();
 
-    const mockNow = jest.spyOn(Date, 'now').mockReturnValue(cached!.expiresAt! + 1);
+    if (cached === null || cached.expiresAt === null) {
+      throw new Error('expected cached entry with expiresAt');
+    }
+
+    const mockNow = jest.spyOn(Date, 'now').mockReturnValue(cached.expiresAt + 1);
 
     try {
       expect(cache.get('/users')).toBeNull();
@@ -139,12 +146,17 @@ describe('Fastify adapter — TTL', () => {
 
     expect(cached).not.toBeNull();
 
-    const mockNow = jest.spyOn(Date, 'now').mockReturnValue(cached!.expiresAt! - 1);
+    if (cached === null || cached.expiresAt === null) {
+      throw new Error('expected cached entry with expiresAt');
+    }
+
+    const { expiresAt } = cached;
+    const mockNow = jest.spyOn(Date, 'now').mockReturnValue(expiresAt - 1);
 
     try {
       expect(cache.get('/users')).not.toBeNull();
 
-      mockNow.mockReturnValue(cached!.expiresAt! + 1);
+      mockNow.mockReturnValue(expiresAt + 1);
       expect(cache.get('/users')).toBeNull();
     } finally {
       mockNow.mockRestore();

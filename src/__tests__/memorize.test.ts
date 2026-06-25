@@ -182,7 +182,7 @@ describe('memorize middleware', () => {
       const info = cache.get('/users');
 
       expect(info).not.toBeNull();
-      expect(info!.statusCode).toBe(200);
+      expect(info?.statusCode).toBe(200);
     });
 
     it('cache.get returns null for an uncached key', () => {
@@ -483,7 +483,7 @@ describe('memorize middleware', () => {
       const info = cache.get('mykey');
 
       expect(info).not.toBeNull();
-      expect(info!.statusCode).toBe(200);
+      expect(info?.statusCode).toBe(200);
     });
 
     it('respects TTL', () => {
@@ -674,8 +674,9 @@ describe('memorize middleware', () => {
       await cache.setAsync('worker-key', value);
       const result = await cache.getValueAsync<typeof value>('worker-key');
 
-      expect(result!.createdAt).toEqual(value.createdAt);
-      expect([...result!.tags]).toEqual(['a', 'b']);
+      expect(result).not.toBeUndefined();
+      expect(result?.createdAt).toEqual(value.createdAt);
+      expect([...(result?.tags ?? [])]).toEqual(['a', 'b']);
     });
 
     it('async worker mode falls back to cooperative yielding for custom serializers', async () => {

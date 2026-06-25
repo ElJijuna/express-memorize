@@ -149,7 +149,10 @@ describe('Koa adapter — cache HIT (subsequent requests)', () => {
     await middleware(createContext(), jest.fn());
     await middleware(createContext(), jest.fn());
 
-    expect(cache.get('/users')!.hits).toBe(3);
+    const hitEntry = cache.get('/users');
+
+    expect(hitEntry).not.toBeNull();
+    expect(hitEntry?.hits).toBe(3);
   });
 });
 
@@ -187,7 +190,11 @@ describe('Koa adapter — TTL', () => {
 
     expect(cached).not.toBeNull();
 
-    jest.useFakeTimers({ now: cached!.expiresAt! + 1 });
+    if (cached === null || cached.expiresAt === null) {
+      throw new Error('expected cached entry with expiresAt');
+    }
+
+    jest.useFakeTimers({ now: cached.expiresAt + 1 });
     expect(cache.get('/users')).toBeNull();
   });
 
@@ -200,10 +207,16 @@ describe('Koa adapter — TTL', () => {
 
     expect(cached).not.toBeNull();
 
-    jest.useFakeTimers({ now: cached!.expiresAt! - 1 });
+    if (cached === null || cached.expiresAt === null) {
+      throw new Error('expected cached entry with expiresAt');
+    }
+
+    const { expiresAt } = cached;
+
+    jest.useFakeTimers({ now: expiresAt - 1 });
     expect(cache.get('/users')).not.toBeNull();
 
-    jest.setSystemTime(cached!.expiresAt! + 1);
+    jest.setSystemTime(expiresAt + 1);
     expect(cache.get('/users')).toBeNull();
   });
 });

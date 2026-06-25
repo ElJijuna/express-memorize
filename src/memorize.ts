@@ -321,7 +321,7 @@ export function memorize(options: MemorizeOptions = {}): Memorize {
 
     const rootCount = store.delete(resolved) ? 1 : 0;
 
-    return rootCount + store.deleteMatching(resolved + DEFAULT_SEPARATOR + '*');
+    return rootCount + store.deleteMatching(`${resolved}${DEFAULT_SEPARATOR}*`);
   };
 
   cache.deleteMatchingAsync = async (
@@ -344,7 +344,7 @@ export function memorize(options: MemorizeOptions = {}): Memorize {
 
     const rootCount = store.delete(resolved) ? 1 : 0;
     const childCount = await store.deleteMatchingAsync(
-      resolved + DEFAULT_SEPARATOR + '*',
+      `${resolved}${DEFAULT_SEPARATOR}*`,
       batchOptions,
     );
 

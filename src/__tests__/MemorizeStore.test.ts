@@ -21,10 +21,10 @@ describe('MemorizeStore', () => {
       const result = store.get('/users');
 
       expect(result).not.toBeNull();
-      expect(result!.body).toEqual({ data: [] });
-      expect(result!.statusCode).toBe(200);
-      expect(result!.contentType).toBe('application/json');
-      expect(result!.key).toBe('/users');
+      expect(result?.body).toEqual({ data: [] });
+      expect(result?.statusCode).toBe(200);
+      expect(result?.contentType).toBe('application/json');
+      expect(result?.key).toBe('/users');
     });
 
     it('returns null for an unknown key', () => {
@@ -35,16 +35,20 @@ describe('MemorizeStore', () => {
       store.set('/users', entry('first'));
       store.set('/users', entry('second'));
 
-      expect(store.get('/users')!.body).toBe('second');
+      const overwritten = store.get('/users');
+
+      expect(overwritten).not.toBeNull();
+      expect(overwritten?.body).toBe('second');
     });
 
     it('uses a finite default TTL when no TTL is set', () => {
       jest.useFakeTimers();
       store.set('/users', entry());
-      const { remainingTtl } = store.get('/users')!;
+      const ttlResult = store.get('/users');
 
-      expect(remainingTtl).not.toBeNull();
-      expect(remainingTtl).toBeGreaterThan(0);
+      expect(ttlResult).not.toBeNull();
+      expect(ttlResult?.remainingTtl).not.toBeNull();
+      expect(ttlResult?.remainingTtl).toBeGreaterThan(0);
       jest.useRealTimers();
     });
   });
@@ -52,14 +56,20 @@ describe('MemorizeStore', () => {
   describe('hits counter', () => {
     it('starts at 1 after set', () => {
       store.set('/users', entry());
-      expect(store.get('/users')!.hits).toBe(1);
+      const hit1 = store.get('/users');
+
+      expect(hit1).not.toBeNull();
+      expect(hit1?.hits).toBe(1);
     });
 
     it('increments on each getRaw call', () => {
       store.set('/users', entry());
       store.getRaw('/users');
       store.getRaw('/users');
-      expect(store.get('/users')!.hits).toBe(3);
+      const hit3 = store.get('/users');
+
+      expect(hit3).not.toBeNull();
+      expect(hit3?.hits).toBe(3);
     });
 
     it('resets to 1 when key is re-set', () => {
@@ -67,7 +77,10 @@ describe('MemorizeStore', () => {
       store.getRaw('/users');
       store.getRaw('/users');
       store.set('/users', entry('new'));
-      expect(store.get('/users')!.hits).toBe(1);
+      const hitReset = store.get('/users');
+
+      expect(hitReset).not.toBeNull();
+      expect(hitReset?.hits).toBe(1);
     });
 
     it('getAll includes hits', () => {
@@ -406,7 +419,8 @@ describe('MemorizeStore', () => {
 
       const info = store.get('/users');
 
-      expect(info!.remainingTtl).toBeLessThanOrEqual(3000);
+      expect(info).not.toBeNull();
+      expect(info?.remainingTtl).toBeLessThanOrEqual(3000);
     });
 
     it('re-setting a key resets the timer', () => {
@@ -416,8 +430,10 @@ describe('MemorizeStore', () => {
       store.set('/users', entry('v2'), 1000); // timer resets
       jest.advanceTimersByTime(800); // 1600ms total but timer reset at 800ms
 
-      expect(store.get('/users')).not.toBeNull();
-      expect(store.get('/users')!.body).toBe('v2');
+      const resetResult = store.get('/users');
+
+      expect(resetResult).not.toBeNull();
+      expect(resetResult?.body).toBe('v2');
     });
 
     it('entries without TTL use the default finite TTL', () => {
@@ -437,8 +453,8 @@ describe('MemorizeStore', () => {
       const info = store.get('/users');
 
       expect(info).not.toBeNull();
-      expect(info!.remainingTtl).toBeNull();
-      expect(info!.expiresAt).toBeNull();
+      expect(info?.remainingTtl).toBeNull();
+      expect(info?.expiresAt).toBeNull();
     });
 
     it('unrefs the shared TTL scheduler so it does not keep the process alive', () => {
@@ -613,14 +629,18 @@ describe('MemorizeStore', () => {
       store.set('/a', entry('hello'));
       const info = store.get('/a');
 
-      expect(info!.size).toBe(Buffer.byteLength('hello'));
+      expect(info).not.toBeNull();
+      expect(info?.size).toBe(Buffer.byteLength('hello'));
     });
 
     it('uses a precomputed entry size when provided', () => {
       store.set('/a', { ...entry('hello'), size: 123 });
 
+      const sizedEntry = store.get('/a');
+
       expect(store.byteSize()).toBe(123);
-      expect(store.get('/a')!.size).toBe(123);
+      expect(sizedEntry).not.toBeNull();
+      expect(sizedEntry?.size).toBe(123);
     });
   });
 
@@ -648,7 +668,10 @@ describe('MemorizeStore', () => {
 
       s.set('/a', entry('too-large'));
 
-      expect(s.get('/a')!.body).toBe('ok');
+      const keptEntry = s.get('/a');
+
+      expect(keptEntry).not.toBeNull();
+      expect(keptEntry?.body).toBe('ok');
     });
 
     it('evicts LRU entries until a new entry fits maxTotalBytes', () => {
@@ -735,7 +758,10 @@ describe('MemorizeStore', () => {
       s.set('/b', entry());
       s.set('/a', entry('updated')); // overwrite, not a new entry
       expect(s.size()).toBe(2);
-      expect(s.get('/a')!.body).toBe('updated');
+      const updatedEntry = s.get('/a');
+
+      expect(updatedEntry).not.toBeNull();
+      expect(updatedEntry?.body).toBe('updated');
     });
 
     it('does not expire unrelated entries after evicting a scheduled entry', () => {

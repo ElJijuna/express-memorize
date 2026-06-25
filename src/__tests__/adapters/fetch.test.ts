@@ -120,7 +120,10 @@ describe('Fetch adapter — cache HIT (subsequent requests)', () => {
     await handler(makeRequest());
     await handler(makeRequest());
     await handler(makeRequest());
-    expect(cache.get('/users')!.hits).toBe(3);
+    const hitEntry = cache.get('/users');
+
+    expect(hitEntry).not.toBeNull();
+    expect(hitEntry?.hits).toBe(3);
   });
 });
 
