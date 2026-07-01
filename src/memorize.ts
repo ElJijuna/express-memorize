@@ -2,8 +2,14 @@ import { createExpressMiddleware } from './adapters/express';
 import { createWorkerAsyncSerializer } from './asyncSerializer';
 import type { DeleteMatchingOptions, Memorize } from './domain/Memorize';
 import type { MemorizeCallOptions } from './domain/MemorizeCallOptions';
-import type { MemorizeOptions } from './domain/MemorizeOptions';
+import type { MemorizeOptions, MemorizeStorageOptions } from './domain/MemorizeOptions';
 import { MemorizeStore } from './MemorizeStore';
+import type { MemorizeStoreLike, MemorizeStoreOptions } from './MemorizeStoreLike';
+import {
+  canUseNativeSqlite,
+  SQLITE_STORAGE_WARNING,
+  SqliteMemorizeStore,
+} from './SqliteMemorizeStore';
 import { createSerializer } from './serializer';
 import { estimateByteSize, serializedByteSize } from './utils/byteSize';
 import { DEFAULT_SEPARATOR } from './utils/createCacheKey';
@@ -19,7 +25,7 @@ function resolvePattern(pattern: string | Array<unknown>): string {
 
 export type { Serializer, SerializerOption } from './serializer';
 
-export type { Memorize, MemorizeCallOptions, MemorizeOptions };
+export type { Memorize, MemorizeCallOptions, MemorizeOptions, MemorizeStorageOptions };
 
 function normalizeAsyncSerializerThreshold(value: number | undefined): number {
   if (value === undefined) {
@@ -39,6 +45,32 @@ function nextVersion(versions: Map<string, number>, key: string): number {
   versions.set(key, version);
 
   return version;
+}
+
+function createStore(
+  options: MemorizeStoreOptions & Pick<MemorizeOptions, 'storage'>,
+): MemorizeStoreLike {
+  const storeOptions = {
+    maxEntries: options.maxEntries,
+    maxValueBytes: options.maxValueBytes,
+    maxTotalBytes: options.maxTotalBytes,
+    sizeLimitAction: options.sizeLimitAction,
+  };
+
+  if (options.storage?.type !== 'sqlite') {
+    return new MemorizeStore(storeOptions);
+  }
+
+  if (!canUseNativeSqlite()) {
+    console.warn(SQLITE_STORAGE_WARNING);
+
+    return new MemorizeStore(storeOptions);
+  }
+
+  return new SqliteMemorizeStore({
+    ...storeOptions,
+    directory: options.storage.directory,
+  });
 }
 
 /**
@@ -102,8 +134,9 @@ export function memorize(options: MemorizeOptions = {}): Memorize {
     asyncSerializerWorkers,
     asyncSerializerThresholdBytes,
     serializer: serializerOption,
+    storage,
   } = options;
-  const store = new MemorizeStore({ maxEntries, maxValueBytes, maxTotalBytes, sizeLimitAction });
+  const store = createStore({ maxEntries, maxValueBytes, maxTotalBytes, sizeLimitAction, storage });
   const serializer = createSerializer(serializerOption);
   const workerSerializer =
     asyncSerializerMode === 'worker'

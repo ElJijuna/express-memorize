@@ -14,7 +14,7 @@
 
 <p align="center">
   In-memory HTTP cache for <strong>Express, Fastify, Koa, NestJS, Hono, Fetch API</strong>, and more.<br/>
-  Caches <code>GET</code> responses with optional TTL — zero dependencies, fully typed.
+  Caches <code>GET</code> responses with optional TTL — zero required dependencies, fully typed.
 </p>
 
 <p align="center">
@@ -41,7 +41,8 @@
 - Cache inspection and invalidation API (`get`, `getAll`, `delete`, `deleteMatching`, `clear`)
 - Hit counter per cache entry
 - `X-Cache: HIT | MISS | BYPASS` response header
-- Zero runtime dependencies, fully typed
+- Zero required runtime dependencies, fully typed
+- Optional persistent SQLite storage via Node.js `node:sqlite`
 
 ## How it works
 
@@ -94,6 +95,10 @@ npm install koa @koa/router   # only if using the Koa adapter
 npm install hono   # only if using the Hono adapter
 npm install @nestjs/common @nestjs/core rxjs   # only if using the NestJS adapter
 ```
+
+SQLite storage uses Node.js `node:sqlite`, so no driver package is required. Use
+Node.js 24 or newer for SQLite storage. Older Node.js runtimes automatically
+fall back to memory storage and emit a warning.
 
 ## Quick Start
 
@@ -500,6 +505,33 @@ cache.getStats();  // { entries, maxEntries, maxValueBytes, maxTotalBytes, byteS
 
 > `byteSize()` is an estimate based on UTF-8 encoding for strings and `byteLength` for buffers. It may not reflect actual VM memory usage.
 
+### SQLite storage
+
+Memory storage is the default and keeps the classic configuration working:
+
+```typescript
+const cache = memorize({ ttl: 60_000 });
+```
+
+Enable persistent SQLite storage with `storage.type: 'sqlite'`:
+
+```typescript
+const cache = memorize({
+  ttl: 60_000,
+  storage: {
+    type: 'sqlite',
+    directory: 'database',
+  },
+});
+```
+
+The SQLite backend creates `express-memorize.sqlite` inside the configured
+directory. If `directory` is omitted, `database` is used. Cached entries persist
+across process restarts until their TTL expires or they are invalidated.
+
+SQLite storage requires Node.js 24 or newer. If configured on an older runtime,
+`express-memorize` logs a warning and falls back to the in-memory store.
+
 ### Inspect the cache
 
 ```typescript
@@ -547,6 +579,7 @@ Creates a cache instance. Returns a `Memorize` object.
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
+| `storage` | `{ type: 'memory' } \| { type: 'sqlite'; directory?: string }` | `{ type: 'memory' }` | Storage backend. SQLite uses Node.js `node:sqlite`, creates `express-memorize.sqlite`, and falls back to memory with a warning on Node.js below 24. |
 | `ttl` | `number` | `60_000` | Time-to-live in milliseconds. Pass `Infinity` for no expiry. |
 | `maxEntries` | `number` | `undefined` | Maximum number of entries. LRU eviction when reached. |
 | `maxValueBytes` | `number` | `undefined` | Maximum serialized byte size for one entry. Oversized entries are skipped by default. |
@@ -638,6 +671,7 @@ discarded instead of overwriting newer state.
 - Only responses with a `2xx` status code are stored.
 - All middleware and adapter instances created from the same `memorize()` call **share the same store**.
 - Two separate `memorize()` calls produce **independent stores**.
+- SQLite-backed stores persist entries between process restarts when they use the same directory.
 - Byte size is an approximation — strings use UTF-8 encoding, objects use `JSON.stringify` length.
 - Async batched inspection/invalidation methods are eventually consistent, not transactional snapshots; other cache operations may interleave between batches.
 

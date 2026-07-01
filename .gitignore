@@ -4,3 +4,4 @@ docs-site
 *.tgz
 test-client/node_modules
 test-client/package-lock.json
+coverage

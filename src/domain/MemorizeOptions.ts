@@ -1,5 +1,17 @@
 import type { SerializerOption } from '../serializer';
 
+export type MemorizeStorageOptions =
+  | { type: 'memory' }
+  | {
+      type: 'sqlite';
+      /**
+       * Directory where `express-memorize.sqlite` is created.
+       *
+       * @defaultValue 'database'
+       */
+      directory?: string;
+    };
+
 /**
  * Options passed to the {@link memorize} factory.
  *
@@ -9,6 +21,17 @@ import type { SerializerOption } from '../serializer';
  * ```
  */
 export interface MemorizeOptions {
+  /**
+   * Storage backend for cached entries.
+   *
+   * - `'memory'` (default) — in-memory store, same behavior as previous versions.
+   * - `'sqlite'` — persistent SQLite store using Node.js `node:sqlite`.
+   *
+   * SQLite storage requires Node.js 24 or newer. Older runtimes fall back to
+   * memory storage and emit a warning.
+   */
+  storage?: MemorizeStorageOptions;
+
   /**
    * Default time-to-live for every cached entry, in milliseconds.
    * Omit to use the store's finite default TTL. Pass `Infinity` to cache indefinitely.

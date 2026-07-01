@@ -1,6 +1,6 @@
 import { setImmediate } from 'node:timers';
 import { MemorizeEventType } from '../domain/MemorizeEventType';
-import { MemorizeStore } from '../MemorizeStore';
+import { MemorizeStore, normalizeByteLimit } from '../MemorizeStore';
 
 const entry = (body: unknown = 'value') => ({
   body,
@@ -29,6 +29,10 @@ describe('MemorizeStore', () => {
 
     it('returns null for an unknown key', () => {
       expect(store.get('/missing')).toBeNull();
+    });
+
+    it('getRaw returns null for an unknown key', () => {
+      expect(store.getRaw('/missing')).toBeNull();
     });
 
     it('overrides an existing entry', () => {
@@ -119,6 +123,18 @@ describe('MemorizeStore', () => {
       expect(all['/b'].body).toBe(2);
     });
 
+    it('getAllAsync evicts expired entries and returns active entries', async () => {
+      store.set('/expired', entry('old'), 0);
+      store.set('/alive', entry('new'), 5000);
+
+      const all = await store.getAllAsync({ batchSize: 1 });
+
+      expect(all).toEqual({
+        '/alive': expect.objectContaining({ body: 'new' }),
+      });
+      expect(store.get('/expired')).toBeNull();
+    });
+
     it('getAllAsync yields between batches', async () => {
       jest.useRealTimers();
       const s = new MemorizeStore();
@@ -145,6 +161,13 @@ describe('MemorizeStore', () => {
 
     it('getAllAsync rejects invalid batch sizes', async () => {
       await expect(store.getAllAsync({ batchSize: 0 })).rejects.toThrow(RangeError);
+    });
+
+    it('normalizes byte limits', () => {
+      expect(normalizeByteLimit('limit', undefined)).toBeUndefined();
+      expect(normalizeByteLimit('limit', 10)).toBe(10);
+      expect(() => normalizeByteLimit('limit', -1)).toThrow(RangeError);
+      expect(() => normalizeByteLimit('limit', Number.NaN)).toThrow(RangeError);
     });
   });
 
@@ -523,6 +546,13 @@ describe('MemorizeStore', () => {
       store.set('/users', entry(), 0);
 
       expect(store.get('/users')).toBeNull();
+    });
+
+    it('getRaw expires ttl 0 entries immediately', () => {
+      store.set('/users', entry(), 0);
+
+      expect(store.getRaw('/users')).toBeNull();
+      expect(store.size()).toBe(0);
     });
 
     it('rejects negative TTL values', () => {

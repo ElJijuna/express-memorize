@@ -1,7 +1,7 @@
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import type { Memorize } from '../domain/Memorize';
 import type { MemorizeCallOptions } from '../domain/MemorizeCallOptions';
-import type { MemorizeStore } from '../MemorizeStore';
+import type { MemorizeStoreLike } from '../MemorizeStoreLike';
 
 /**
  * Creates an Express `RequestHandler` that caches `GET` responses using the
@@ -29,7 +29,7 @@ export function createExpressAdapter(
 
 /** @internal Used by the memorize() factory. */
 export function createExpressMiddleware(
-  store: MemorizeStore,
+  store: MemorizeStoreLike,
   globalTtl?: number,
 ): (callOptions?: MemorizeCallOptions) => RequestHandler {
   return (callOptions?: MemorizeCallOptions): RequestHandler => {

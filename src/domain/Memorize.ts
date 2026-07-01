@@ -1,5 +1,5 @@
 import type { RequestHandler } from 'express';
-import type { MemorizeStore } from '../MemorizeStore';
+import type { MemorizeStoreLike } from '../MemorizeStoreLike';
 import type { CacheInfo } from './CacheInfo';
 import type { MemorizeBatchOptions } from './MemorizeBatchOptions';
 import type { MemorizeCallOptions } from './MemorizeCallOptions';
@@ -339,7 +339,7 @@ export interface Memorize {
    * The underlying store. Intended for use by framework adapters only.
    * @internal
    */
-  _store: MemorizeStore;
+  _store: MemorizeStoreLike;
 
   /**
    * Global TTL configured through `memorize({ ttl })`. Intended for use by

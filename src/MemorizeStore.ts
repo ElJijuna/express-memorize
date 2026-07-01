@@ -10,6 +10,7 @@ import type { MemorizeEvictEvent } from './domain/MemorizeEvictEvent';
 import type { MemorizeExpireEvent } from './domain/MemorizeExpireEvent';
 import type { MemorizeSetEvent } from './domain/MemorizeSetEvent';
 import type { MemorizeStats } from './domain/MemorizeStats';
+import type { MemorizeStoreLike, MemorizeStoreOptions, StoreEntryInput } from './MemorizeStoreLike';
 import { estimateByteSize } from './utils/byteSize';
 import { yieldToEventLoop } from './utils/eventLoop';
 import { globToRegex } from './utils/globToRegex';
@@ -35,21 +36,10 @@ type ListenerMap = {
   [MemorizeEventType.Evict]: Array<(e: MemorizeEvictEvent) => void>;
 };
 
-interface MemorizeStoreOptions {
-  maxEntries?: number;
-  maxValueBytes?: number;
-  maxTotalBytes?: number;
-  sizeLimitAction?: 'skip' | 'throw';
-}
-
-type StoreEntryInput = Omit<CacheEntry, 'expiresAt' | 'hits' | 'size'> & {
-  size?: number;
-};
-
 const DEFAULT_TTL = 60_000;
 const DEFAULT_BATCH_SIZE = 1_000;
 
-function normalizeTtl(ttl?: number | null): { expiresAt: number | null } {
+export function normalizeTtl(ttl?: number | null): { expiresAt: number | null } {
   if (ttl === Infinity) {
     return { expiresAt: null };
   }
@@ -71,7 +61,7 @@ function normalizeTtl(ttl?: number | null): { expiresAt: number | null } {
   return { expiresAt: Date.now() + effectiveTtl };
 }
 
-function normalizeBatchSize(options?: MemorizeBatchOptions): number {
+export function normalizeBatchSize(options?: MemorizeBatchOptions): number {
   const batchSize = options?.batchSize ?? DEFAULT_BATCH_SIZE;
 
   if (!Number.isInteger(batchSize) || batchSize <= 0) {
@@ -81,7 +71,7 @@ function normalizeBatchSize(options?: MemorizeBatchOptions): number {
   return batchSize;
 }
 
-function normalizeByteLimit(name: string, value: number | undefined): number | undefined {
+export function normalizeByteLimit(name: string, value: number | undefined): number | undefined {
   if (value === undefined) {
     return undefined;
   }
@@ -99,7 +89,7 @@ function normalizeByteLimit(name: string, value: number | undefined): number | u
  * You do not usually interact with this class directly — use the {@link memorize} factory
  * instead, which wraps this store in an Express middleware.
  */
-export class MemorizeStore {
+export class MemorizeStore implements MemorizeStoreLike {
   private _store = new Map<string, CacheEntry>();
   private _expiryTimer: ReturnType<typeof timerSetTimeout> | null = null;
   private _nextExpiryAt: number | null = null;
