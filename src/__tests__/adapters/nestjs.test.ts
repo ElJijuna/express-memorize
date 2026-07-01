@@ -128,6 +128,39 @@ describe('NestJS adapter', () => {
     expect(headers['X-Cache']).toBe('HIT');
   });
 
+  it('supports object subscribers with complete callbacks for cached hits', () => {
+    const cache = memorize();
+    const interceptor = new MemorizeInterceptor(cache);
+    const { context } = createContext();
+    const next = jest.fn();
+    const complete = jest.fn();
+
+    cache._store.set('/users', {
+      body: { data: [] },
+      statusCode: 200,
+      contentType: 'application/json',
+    });
+
+    interceptor.intercept(context, { handle: jest.fn() }).subscribe({ next, complete });
+
+    expect(next).toHaveBeenCalledWith({ data: [] });
+    expect(complete).toHaveBeenCalled();
+  });
+
+  it('supports empty object subscribers for cached hits', () => {
+    const cache = memorize();
+    const interceptor = new MemorizeInterceptor(cache);
+    const { context } = createContext();
+
+    cache._store.set('/users', {
+      body: { data: [] },
+      statusCode: 200,
+      contentType: 'application/json',
+    });
+
+    expect(() => interceptor.intercept(context, { handle: jest.fn() }).subscribe({})).not.toThrow();
+  });
+
   it('parses cached JSON string bodies on hit', () => {
     const cache = memorize();
     const interceptor = new MemorizeInterceptor(cache);
@@ -263,6 +296,21 @@ describe('NestJS adapter', () => {
     expect(cache.get('/users')).toBeNull();
   });
 
+  it('tolerates responses without cache header helpers', () => {
+    const cache = memorize();
+    const interceptor = new MemorizeInterceptor(cache);
+    const { context } = createContext();
+
+    context.switchToHttp = () => ({
+      getRequest: () => ({ method: 'GET', originalUrl: '/users' }),
+      getResponse: () => ({}),
+    });
+
+    expect(() =>
+      subscribe(interceptor.intercept(context, { handle: () => observableOf({ data: [] }) })),
+    ).not.toThrow();
+  });
+
   it('sets headers with response.header when setHeader is unavailable', () => {
     const cache = memorize();
     const interceptor = new MemorizeInterceptor(cache);
@@ -309,6 +357,30 @@ describe('NestJS adapter', () => {
     expect(cache.get('/users')).toBeNull();
   });
 
+  it('allows cache miss observables to be subscribed without an observer', () => {
+    const cache = memorize();
+    const interceptor = new MemorizeInterceptor(cache);
+    const { context } = createContext();
+
+    expect(() =>
+      interceptor.intercept(context, { handle: () => observableOf({ data: [] }) }).subscribe(),
+    ).not.toThrow();
+    expect(cache.get('/users')).not.toBeNull();
+  });
+
+  it('allows cache miss error observables to be subscribed without an error handler', () => {
+    const cache = memorize();
+    const interceptor = new MemorizeInterceptor(cache);
+    const { context } = createContext();
+
+    expect(() =>
+      interceptor
+        .intercept(context, { handle: () => observableError(new Error('boom')) })
+        .subscribe(),
+    ).not.toThrow();
+    expect(cache.get('/users')).toBeNull();
+  });
+
   it('forwards observable errors without caching', () => {
     const cache = memorize();
     const interceptor = new MemorizeInterceptor(cache);
@@ -343,6 +415,23 @@ describe('NestJS adapter', () => {
     expect(complete).toHaveBeenCalled();
   });
 
+  it('supports function subscribers for cached hits without complete callback', () => {
+    const cache = memorize();
+    const interceptor = new MemorizeInterceptor(cache);
+    const { context } = createContext();
+    const next = jest.fn();
+
+    cache._store.set('/users', {
+      body: { data: [] },
+      statusCode: 200,
+      contentType: 'application/json',
+    });
+
+    interceptor.intercept(context, { handle: jest.fn() }).subscribe(next);
+
+    expect(next).toHaveBeenCalledWith({ data: [] });
+  });
+
   it('supports controller-level metadata', () => {
     class UsersController {}
     MemorizeCacheKey('controller-users')(UsersController);
@@ -353,6 +442,34 @@ describe('NestJS adapter', () => {
     subscribe(interceptor.intercept(context, { handle: () => observableOf({ data: [] }) }));
 
     expect(cache.get('controller-users')).not.toBeNull();
+  });
+
+  it('supports method decorators with descriptors and repeated fallback metadata', () => {
+    class UsersController {
+      list() {
+        return undefined;
+      }
+    }
+
+    const descriptor = Object.getOwnPropertyDescriptor(UsersController.prototype, 'list');
+
+    if (!descriptor?.value) {
+      throw new Error('expected method descriptor');
+    }
+
+    MemorizeCacheKey('method-users')(UsersController.prototype, 'list', descriptor);
+    MemorizeTtl(10_000)(UsersController.prototype, 'list', descriptor);
+
+    const cache = memorize();
+    const interceptor = new MemorizeInterceptor(cache);
+    const { context } = createContext({
+      controller: UsersController,
+      handler: descriptor.value as object,
+    });
+
+    subscribe(interceptor.intercept(context, { handle: () => observableOf({ data: [] }) }));
+
+    expect(cache.get('method-users')).not.toBeNull();
   });
 
   it('uses Reflect metadata APIs when available', () => {
@@ -415,5 +532,15 @@ describe('NestJS adapter', () => {
 
     expect(cache.getStats().entries).toBe(0);
     expect(interceptor).toBeInstanceOf(MemorizeInterceptor);
+  });
+
+  it('uses default constructor and module options', () => {
+    const interceptor = new MemorizeInterceptor();
+    const module = MemorizeModule.forRoot();
+    const { context } = createContext();
+
+    subscribe(interceptor.intercept(context, { handle: () => observableOf({ data: [] }) }));
+
+    expect(module.providers).toHaveLength(3);
   });
 });

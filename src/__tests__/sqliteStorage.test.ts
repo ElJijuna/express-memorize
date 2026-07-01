@@ -62,6 +62,50 @@ describe('SQLite storage', () => {
     }
   });
 
+  it('reports native SQLite unavailable when process metadata is missing', () => {
+    const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'process');
+
+    Object.defineProperty(globalThis, 'process', {
+      configurable: true,
+      value: undefined,
+    });
+
+    try {
+      expect(canUseNativeSqlite()).toBe(false);
+    } finally {
+      if (descriptor) {
+        Object.defineProperty(globalThis, 'process', descriptor);
+      }
+    }
+  });
+
+  it('reports native SQLite unavailable when node:sqlite cannot be loaded', () => {
+    const descriptor = Object.getOwnPropertyDescriptor(process.versions, 'node');
+
+    Object.defineProperty(process.versions, 'node', {
+      configurable: true,
+      value: '24.0.0',
+    });
+
+    jest.isolateModules(() => {
+      jest.doMock('node:sqlite', () => {
+        throw new Error('missing node:sqlite');
+      });
+
+      const { canUseNativeSqlite: canUseNativeSqliteWithoutModule } = jest.requireActual(
+        '../SqliteMemorizeStore',
+      ) as typeof import('../SqliteMemorizeStore');
+
+      expect(canUseNativeSqliteWithoutModule()).toBe(false);
+    });
+
+    if (descriptor) {
+      Object.defineProperty(process.versions, 'node', descriptor);
+    }
+
+    jest.dontMock('node:sqlite');
+  });
+
   const describeIfSqlite = canUseNativeSqlite() ? describe : describe.skip;
 
   describeIfSqlite('native node:sqlite backend', () => {
@@ -290,6 +334,35 @@ describe('SQLite storage', () => {
       expect(cache.getAll()).toEqual({});
     });
 
+    it('clearAsync yields between batches when entries remain', async () => {
+      jest.useRealTimers();
+      const cache = memorize({ storage: { type: 'sqlite', directory } });
+
+      let yielded = false;
+
+      cache._store.set('/a', { body: 'a', statusCode: 200, contentType: 'text/plain' });
+      cache._store.set('/b', { body: 'b', statusCode: 200, contentType: 'text/plain' });
+      setImmediate(() => {
+        yielded = true;
+      });
+
+      await expect(cache.clearAsync({ batchSize: 1 })).resolves.toBe(2);
+
+      expect(yielded).toBe(true);
+      expect(cache.size()).toBe(0);
+    });
+
+    it('clearAsync stops when no keys are returned during a scan', async () => {
+      const store = new SqliteMemorizeStore({ directory }) as SqliteMemorizeStore & {
+        _keys(limit?: number): string[];
+      };
+
+      store.set('/a', { body: 'a', statusCode: 200, contentType: 'text/plain' });
+      store._keys = () => [];
+
+      await expect(store.clearAsync({ batchSize: 1 })).resolves.toBe(0);
+    });
+
     it('returns false or zero for missing deletes and unmatched patterns', async () => {
       const cache = memorize({ storage: { type: 'sqlite', directory } });
 
@@ -332,6 +405,16 @@ describe('SQLite storage', () => {
 
       expect(cache.size()).toBe(0);
       expect(cache.getAll()).toEqual({});
+    });
+
+    it('internal eviction helpers no-op when the row is missing', () => {
+      const store = new SqliteMemorizeStore({ directory }) as SqliteMemorizeStore & {
+        _evict(key: string, reason: MemorizeEventType.Delete): void;
+        _evictExpiredEntry(key: string): boolean;
+      };
+
+      expect(() => store._evict('/missing', MemorizeEventType.Delete)).not.toThrow();
+      expect(store._evictExpiredEntry('/missing')).toBe(false);
     });
 
     it('getAllAsync yields in batches and skips expired rows', async () => {
