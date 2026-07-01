@@ -83,6 +83,36 @@ describe('Koa adapter — cache MISS (first request)', () => {
 
     expect(cache.get('/users')).toBeNull();
   });
+
+  it('infers text/plain content type for string bodies', async () => {
+    const cache = memorize();
+    const ctx = createContext('GET', '/text');
+
+    await createKoaMiddleware(cache)(ctx, async () => {
+      ctx.status = 200;
+      ctx.body = 'pong';
+    });
+
+    expect(cache.get('/text')?.contentType).toBe('text/plain');
+  });
+
+  it('infers application/octet-stream for buffer and null bodies', async () => {
+    const cache = memorize();
+    const bufferCtx = createContext('GET', '/buffer');
+    const nullCtx = createContext('GET', '/null');
+
+    await createKoaMiddleware(cache)(bufferCtx, async () => {
+      bufferCtx.status = 200;
+      bufferCtx.body = Buffer.from('pong');
+    });
+    await createKoaMiddleware(cache)(nullCtx, async () => {
+      nullCtx.status = 200;
+      nullCtx.body = null;
+    });
+
+    expect(cache.get('/buffer')?.contentType).toBe('application/octet-stream');
+    expect(cache.get('/null')?.contentType).toBe('application/octet-stream');
+  });
 });
 
 describe('Koa adapter — cache HIT (subsequent requests)', () => {

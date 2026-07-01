@@ -553,6 +553,34 @@ describe('memorize middleware', () => {
       expect(value).toEqual({ ok: true });
     });
 
+    it('getValue returns undefined when deserialization fails', () => {
+      const cache = memorize({ serializer: 'json' });
+
+      cache._store.set('bad-json', {
+        body: '{bad json',
+        statusCode: 200,
+        contentType: 'application/json',
+      });
+
+      expect(cache.getValue('bad-json')).toBeUndefined();
+    });
+
+    it('getValueAsync returns undefined when main-thread deserialization fails', async () => {
+      const cache = memorize({
+        serializer: 'json',
+        asyncSerializer: 'worker',
+        asyncSerializerThresholdBytes: 1_000_000,
+      });
+
+      cache._store.set('bad-json', {
+        body: '{bad json',
+        statusCode: 200,
+        contentType: 'application/json',
+      });
+
+      await expect(cache.getValueAsync('bad-json')).resolves.toBeUndefined();
+    });
+
     it('setAsync respects TTL', async () => {
       jest.useFakeTimers();
       const cache = memorize();
@@ -612,6 +640,37 @@ describe('memorize middleware', () => {
         ok: true,
         items: [1, 2, 3],
       });
+    });
+
+    it('worker getValueAsync returns undefined when deserialization fails', async () => {
+      const cache = memorize({
+        serializer: 'json',
+        asyncSerializer: 'worker',
+        asyncSerializerThresholdBytes: 0,
+      });
+
+      cache._store.set('bad-json', {
+        body: '{bad json',
+        statusCode: 200,
+        contentType: 'application/json',
+        size: 100,
+      });
+
+      await expect(cache.getValueAsync('bad-json')).resolves.toBeUndefined();
+    });
+
+    it('does not let an older worker setAsync overwrite a newer set', async () => {
+      const cache = memorize({
+        serializer: 'json',
+        asyncSerializer: 'worker',
+        asyncSerializerThresholdBytes: 0,
+      });
+      const pendingSet = cache.setAsync('worker-race-key', { value: 'old' });
+
+      cache.set('worker-race-key', { value: 'new' });
+      await pendingSet;
+
+      expect(cache.getValue('worker-race-key')).toEqual({ value: 'new' });
     });
 
     it('clamps an oversized asyncSerializerWorkers request and still works', async () => {
@@ -1088,6 +1147,19 @@ describe('memorize middleware', () => {
       expect(cache.getValue('users:21')).toBeUndefined();
       expect(cache.getValue('users:21:posts')).toBeUndefined();
       expect(cache.getValue('users:42')).toBe('bob');
+    });
+
+    it('deleteMatchingAsync array exactMatch removes only the exact key', async () => {
+      const cache = memorize();
+
+      cache.set('users:21', 'alice');
+      cache.set('users:21:posts', 'posts');
+
+      const count = await cache.deleteMatchingAsync(['users', 21], { exactMatch: true });
+
+      expect(count).toBe(1);
+      expect(cache.getValue('users:21')).toBeUndefined();
+      expect(cache.getValue('users:21:posts')).toBe('posts');
     });
   });
 });

@@ -21,6 +21,10 @@ describe('createSerializer', () => {
     it('serialize returns a string', () => {
       expect(typeof s.serialize({ x: 1 })).toBe('string');
     });
+
+    it('throws when deserializing invalid JSON', () => {
+      expect(() => s.deserialize('{bad json')).toThrow();
+    });
   });
 
   describe("'v8'", () => {
@@ -60,6 +64,44 @@ describe('createSerializer', () => {
 
     it('does not throw on Node.js (v8 is always available)', () => {
       expect(() => createSerializer('v8')).not.toThrow();
+    });
+  });
+
+  describe('when node:v8 is unavailable', () => {
+    beforeEach(() => {
+      jest.resetModules();
+    });
+
+    afterEach(() => {
+      jest.dontMock('node:v8');
+      jest.resetModules();
+    });
+
+    it('throws for explicit v8 serializer', () => {
+      jest.doMock('node:v8', () => {
+        throw new Error('missing node:v8');
+      });
+
+      const { createSerializer: createSerializerWithoutV8 } = jest.requireActual(
+        '../serializer',
+      ) as typeof import('../serializer');
+
+      expect(() => createSerializerWithoutV8('v8')).toThrow(
+        '[express-memorize] node:v8 is not available in this runtime',
+      );
+    });
+
+    it('falls back to JSON for auto serializer', () => {
+      jest.doMock('node:v8', () => {
+        throw new Error('missing node:v8');
+      });
+
+      const { createSerializer: createSerializerWithoutV8 } = jest.requireActual(
+        '../serializer',
+      ) as typeof import('../serializer');
+      const serializer = createSerializerWithoutV8('auto');
+
+      expect(serializer.deserialize(serializer.serialize({ ok: true }))).toEqual({ ok: true });
     });
   });
 
