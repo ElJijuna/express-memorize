@@ -21,11 +21,18 @@ export type StoreEntryInput = Omit<CacheEntry, 'expiresAt' | 'hits' | 'size'> & 
 };
 
 export interface MemorizeStoreLike {
-  on(event: MemorizeEventType.Set, handler: (e: MemorizeSetEvent) => void): void;
-  on(event: MemorizeEventType.Delete, handler: (e: MemorizeDeleteEvent) => void): void;
-  on(event: MemorizeEventType.Expire, handler: (e: MemorizeExpireEvent) => void): void;
-  on(event: MemorizeEventType.Empty, handler: (e: MemorizeEmptyEvent) => void): void;
-  on(event: MemorizeEventType.Evict, handler: (e: MemorizeEvictEvent) => void): void;
+  on(event: MemorizeEventType.Set, handler: (e: MemorizeSetEvent) => void): () => void;
+  on(event: MemorizeEventType.Delete, handler: (e: MemorizeDeleteEvent) => void): () => void;
+  on(event: MemorizeEventType.Expire, handler: (e: MemorizeExpireEvent) => void): () => void;
+  on(event: MemorizeEventType.Empty, handler: (e: MemorizeEmptyEvent) => void): () => void;
+  on(event: MemorizeEventType.Evict, handler: (e: MemorizeEvictEvent) => void): () => void;
+  off(event: MemorizeEventType.Set, handler: (e: MemorizeSetEvent) => void): void;
+  off(event: MemorizeEventType.Delete, handler: (e: MemorizeDeleteEvent) => void): void;
+  off(event: MemorizeEventType.Expire, handler: (e: MemorizeExpireEvent) => void): void;
+  off(event: MemorizeEventType.Empty, handler: (e: MemorizeEmptyEvent) => void): void;
+  off(event: MemorizeEventType.Evict, handler: (e: MemorizeEvictEvent) => void): void;
+  /** Releases timers and other resources held by the store. Optional for custom stores. */
+  dispose?(): void;
   set(key: string, entry: StoreEntryInput, ttl?: number | null): void;
   get(key: string): CacheInfo | null;
   getAll(): Record<string, CacheInfo>;

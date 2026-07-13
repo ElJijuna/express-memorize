@@ -589,6 +589,20 @@ cache.on(MemorizeEventType.Delete, (e) => console.log('deleted', e.key));
 cache.on(MemorizeEventType.Expire, (e) => console.log('expired', e.key));
 cache.on(MemorizeEventType.Evict,  (e) => console.log('evicted', e.key)); // maxEntries LRU
 cache.on(MemorizeEventType.Empty,  ()  => console.log('cache is empty'));
+
+// on() returns an unsubscribe function; off() removes a listener by reference
+const unsubscribe = cache.on(MemorizeEventType.Set, handler);
+unsubscribe();                              // or:
+cache.off(MemorizeEventType.Set, handler);
+```
+
+### Disposing an instance
+
+```typescript
+// Cancels the expiry timer, removes all listeners, terminates worker threads,
+// and closes the SQLite handle (persisted entries stay on disk).
+// Useful in tests and graceful shutdowns.
+cache.dispose();
 ```
 
 ---
@@ -655,6 +669,8 @@ discarded instead of overwriting newer state.
 | `deleteMatchingAsync` | `(pattern, { batchSize }?) => Promise<number>` | Async batched variant of `deleteMatching`. |
 | `clear` | `() => void` | Removes all entries. |
 | `clearAsync` | `({ batchSize }?) => Promise<number>` | Async batched variant of `clear`. |
+| `off` | `(event, handler) => void` | Removes a listener registered with `on` (which also returns an unsubscribe function). |
+| `dispose` | `() => void` | Releases timers, listeners, worker threads, and the SQLite handle. The instance must not be used afterwards. |
 | `size` | `() => number` | Number of active entries. |
 | `byteSize` | `() => number` | Approximate total body size in bytes. |
 | `getStats` | `() => MemorizeStats` | Aggregate stats: `{ entries, maxEntries, maxValueBytes, maxTotalBytes, byteSize, hits, misses, hitRatio }`. |

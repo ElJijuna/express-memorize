@@ -1162,4 +1162,58 @@ describe('memorize middleware', () => {
       expect(cache.getValue('users:21:posts')).toBe('posts');
     });
   });
+
+  describe('cache.off / cache.dispose', () => {
+    it('off() removes a listener registered through the cache', () => {
+      const cache = memorize();
+      const handler = jest.fn();
+
+      cache.on(MemorizeEventType.Set, handler);
+      cache.off(MemorizeEventType.Set, handler);
+      cache.set('key', 'value');
+
+      expect(handler).not.toHaveBeenCalled();
+    });
+
+    it('on() returns an unsubscribe function', () => {
+      const cache = memorize();
+      const handler = jest.fn();
+      const unsubscribe = cache.on(MemorizeEventType.Set, handler);
+
+      cache.set('a', 1);
+      unsubscribe();
+      cache.set('b', 2);
+
+      expect(handler).toHaveBeenCalledTimes(1);
+    });
+
+    it('dispose() cancels timers and drops entries without emitting events', () => {
+      jest.useFakeTimers();
+
+      try {
+        const cache = memorize({ ttl: 1000 });
+        const expired = jest.fn();
+
+        cache.on(MemorizeEventType.Expire, expired);
+        cache.set('key', 'value');
+
+        cache.dispose();
+        jest.advanceTimersByTime(2000);
+
+        expect(cache.size()).toBe(0);
+        expect(expired).not.toHaveBeenCalled();
+        expect(jest.getTimerCount()).toBe(0);
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it('dispose() terminates the worker serializer pool', async () => {
+      const cache = memorize({ asyncSerializer: 'worker', asyncSerializerThresholdBytes: 0 });
+
+      await cache.setAsync('key', { data: 'value' });
+
+      expect(() => cache.dispose()).not.toThrow();
+    });
+  });
 });

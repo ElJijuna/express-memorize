@@ -283,6 +283,19 @@ describe('SQLite storage', () => {
       expect(cache.getStats()).toMatchObject({ hits: 1, misses: 1, hitRatio: 0.5 });
     });
 
+    it('dispose() closes the database while keeping persisted entries on disk', () => {
+      const first = memorize({ storage: { type: 'sqlite', directory }, serializer: 'json' });
+
+      first.set('users:list', [{ id: 1 }], Infinity);
+      first.dispose();
+
+      expect(() => first.set('after-dispose', 1)).toThrow();
+
+      const second = memorize({ storage: { type: 'sqlite', directory }, serializer: 'json' });
+
+      expect(second.getValue('users:list')).toEqual([{ id: 1 }]);
+    });
+
     it('honors maxValueBytes skip and throw modes', () => {
       const skip = memorize({ storage: { type: 'sqlite', directory }, maxValueBytes: 3 });
 

@@ -129,22 +129,49 @@ export class MemorizeStore implements MemorizeStoreLike {
    *
    * @param event - The event to listen for.
    * @param handler - Callback invoked with the event payload.
+   * @returns A function that unregisters the listener.
    *
    * @example
    * ```ts
-   * store.on(MemorizeEventType.Set,   (e) => console.log('cached',  e.key));
-   * store.on(MemorizeEventType.Evict, (e) => console.log('evicted', e.key));
+   * const unsubscribe = store.on(MemorizeEventType.Set, (e) => console.log('cached', e.key));
+   * unsubscribe();
    * ```
    */
-  on(event: MemorizeEventType.Set, handler: (e: MemorizeSetEvent) => void): void;
-  on(event: MemorizeEventType.Delete, handler: (e: MemorizeDeleteEvent) => void): void;
-  on(event: MemorizeEventType.Expire, handler: (e: MemorizeExpireEvent) => void): void;
-  on(event: MemorizeEventType.Empty, handler: (e: MemorizeEmptyEvent) => void): void;
-  on(event: MemorizeEventType.Evict, handler: (e: MemorizeEvictEvent) => void): void;
-  on(event: MemorizeEventType, handler: (e: never) => void): void {
+  on(event: MemorizeEventType.Set, handler: (e: MemorizeSetEvent) => void): () => void;
+  on(event: MemorizeEventType.Delete, handler: (e: MemorizeDeleteEvent) => void): () => void;
+  on(event: MemorizeEventType.Expire, handler: (e: MemorizeExpireEvent) => void): () => void;
+  on(event: MemorizeEventType.Empty, handler: (e: MemorizeEmptyEvent) => void): () => void;
+  on(event: MemorizeEventType.Evict, handler: (e: MemorizeEvictEvent) => void): () => void;
+  on(event: MemorizeEventType, handler: (e: never) => void): () => void {
     const listeners = this._listeners[event] as Array<(e: never) => void>;
 
     listeners.push(handler);
+
+    return () => this._off(event, handler);
+  }
+
+  /**
+   * Unregisters a previously registered event listener. Unknown handlers are ignored.
+   *
+   * @param event - The event the listener was registered for.
+   * @param handler - The exact handler reference passed to {@link on}.
+   */
+  off(event: MemorizeEventType.Set, handler: (e: MemorizeSetEvent) => void): void;
+  off(event: MemorizeEventType.Delete, handler: (e: MemorizeDeleteEvent) => void): void;
+  off(event: MemorizeEventType.Expire, handler: (e: MemorizeExpireEvent) => void): void;
+  off(event: MemorizeEventType.Empty, handler: (e: MemorizeEmptyEvent) => void): void;
+  off(event: MemorizeEventType.Evict, handler: (e: MemorizeEvictEvent) => void): void;
+  off(event: MemorizeEventType, handler: (e: never) => void): void {
+    this._off(event, handler);
+  }
+
+  private _off(event: MemorizeEventType, handler: (e: never) => void): void {
+    const listeners = this._listeners[event] as Array<(e: never) => void>;
+    const index = listeners.indexOf(handler);
+
+    if (index !== -1) {
+      listeners.splice(index, 1);
+    }
   }
 
   /**
@@ -673,6 +700,27 @@ export class MemorizeStore implements MemorizeStoreLike {
     }
 
     return true;
+  }
+
+  /**
+   * Releases all resources held by the store: cancels the shared expiry timer
+   * and drops every entry and listener **without emitting events**. Useful in
+   * tests and graceful shutdowns. The store must not be used after disposal.
+   */
+  dispose(): void {
+    this._clearExpiryTimer();
+    this._nextExpiryKey = null;
+    this._nextExpiryAt = null;
+    this._store.clear();
+    this._expiryHeap.clear();
+    this._totalByteSize = 0;
+    this._listeners = {
+      [MemorizeEventType.Set]: [],
+      [MemorizeEventType.Delete]: [],
+      [MemorizeEventType.Expire]: [],
+      [MemorizeEventType.Empty]: [],
+      [MemorizeEventType.Evict]: [],
+    };
   }
 
   private _emit(event: MemorizeEventType, payload: MemorizeEvent): void {

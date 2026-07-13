@@ -26,6 +26,7 @@ interface V8Serializer {
 interface SqliteDatabase {
   exec(sql: string): void;
   prepare(sql: string): SqliteStatement;
+  close(): void;
 }
 
 interface SqliteStatement {
@@ -179,15 +180,35 @@ export class SqliteMemorizeStore implements MemorizeStoreLike {
     this._scheduleNextExpiry();
   }
 
-  on(event: MemorizeEventType.Set, handler: (e: MemorizeSetEvent) => void): void;
-  on(event: MemorizeEventType.Delete, handler: (e: MemorizeDeleteEvent) => void): void;
-  on(event: MemorizeEventType.Expire, handler: (e: MemorizeExpireEvent) => void): void;
-  on(event: MemorizeEventType.Empty, handler: (e: MemorizeEmptyEvent) => void): void;
-  on(event: MemorizeEventType.Evict, handler: (e: MemorizeEvictEvent) => void): void;
-  on(event: MemorizeEventType, handler: (e: never) => void): void {
+  on(event: MemorizeEventType.Set, handler: (e: MemorizeSetEvent) => void): () => void;
+  on(event: MemorizeEventType.Delete, handler: (e: MemorizeDeleteEvent) => void): () => void;
+  on(event: MemorizeEventType.Expire, handler: (e: MemorizeExpireEvent) => void): () => void;
+  on(event: MemorizeEventType.Empty, handler: (e: MemorizeEmptyEvent) => void): () => void;
+  on(event: MemorizeEventType.Evict, handler: (e: MemorizeEvictEvent) => void): () => void;
+  on(event: MemorizeEventType, handler: (e: never) => void): () => void {
     const listeners = this._listeners[event] as Array<(e: never) => void>;
 
     listeners.push(handler);
+
+    return () => this._off(event, handler);
+  }
+
+  off(event: MemorizeEventType.Set, handler: (e: MemorizeSetEvent) => void): void;
+  off(event: MemorizeEventType.Delete, handler: (e: MemorizeDeleteEvent) => void): void;
+  off(event: MemorizeEventType.Expire, handler: (e: MemorizeExpireEvent) => void): void;
+  off(event: MemorizeEventType.Empty, handler: (e: MemorizeEmptyEvent) => void): void;
+  off(event: MemorizeEventType.Evict, handler: (e: MemorizeEvictEvent) => void): void;
+  off(event: MemorizeEventType, handler: (e: never) => void): void {
+    this._off(event, handler);
+  }
+
+  private _off(event: MemorizeEventType, handler: (e: never) => void): void {
+    const listeners = this._listeners[event] as Array<(e: never) => void>;
+    const index = listeners.indexOf(handler);
+
+    if (index !== -1) {
+      listeners.splice(index, 1);
+    }
   }
 
   set(key: string, entry: StoreEntryInput, ttl?: number | null): void {
@@ -666,6 +687,26 @@ export class SqliteMemorizeStore implements MemorizeStoreLike {
     }
 
     return true;
+  }
+
+  /**
+   * Releases all resources held by the store: cancels the expiry timer, drops
+   * every listener, and closes the underlying SQLite database. Persisted
+   * entries are kept on disk. The store must not be used after disposal.
+   */
+  dispose(): void {
+    this._clearExpiryTimer();
+    this._nextExpiryKey = null;
+    this._nextExpiryAt = null;
+    this._statements.clear();
+    this._listeners = {
+      [MemorizeEventType.Set]: [],
+      [MemorizeEventType.Delete]: [],
+      [MemorizeEventType.Expire]: [],
+      [MemorizeEventType.Empty]: [],
+      [MemorizeEventType.Evict]: [],
+    };
+    this._db.close();
   }
 
   private _emit(event: MemorizeEventType, payload: MemorizeEvent): void {

@@ -222,6 +222,83 @@ describe('MemorizeStore', () => {
     });
   });
 
+  describe('off / unsubscribe', () => {
+    it('off() removes a registered listener', () => {
+      const handler = jest.fn();
+
+      store.on(MemorizeEventType.Set, handler);
+      store.off(MemorizeEventType.Set, handler);
+      store.set('/users', entry());
+
+      expect(handler).not.toHaveBeenCalled();
+    });
+
+    it('on() returns an unsubscribe function', () => {
+      const handler = jest.fn();
+      const unsubscribe = store.on(MemorizeEventType.Set, handler);
+
+      store.set('/a', entry());
+      unsubscribe();
+      store.set('/b', entry());
+
+      expect(handler).toHaveBeenCalledTimes(1);
+    });
+
+    it('unsubscribing twice or removing an unknown handler is a no-op', () => {
+      const kept = jest.fn();
+      const handler = jest.fn();
+      const unsubscribe = store.on(MemorizeEventType.Set, handler);
+
+      store.on(MemorizeEventType.Set, kept);
+      unsubscribe();
+      unsubscribe();
+      store.off(MemorizeEventType.Set, jest.fn());
+      store.set('/users', entry());
+
+      expect(handler).not.toHaveBeenCalled();
+      expect(kept).toHaveBeenCalledTimes(1);
+    });
+
+    it('only removes the given handler, keeping the rest', () => {
+      const first = jest.fn();
+      const second = jest.fn();
+
+      store.on(MemorizeEventType.Set, first);
+      store.on(MemorizeEventType.Set, second);
+      store.off(MemorizeEventType.Set, first);
+      store.set('/users', entry());
+
+      expect(first).not.toHaveBeenCalled();
+      expect(second).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('dispose', () => {
+    it('cancels the expiry timer and drops entries without emitting events', () => {
+      jest.useFakeTimers();
+
+      try {
+        const expired = jest.fn();
+        const deleted = jest.fn();
+
+        store.on(MemorizeEventType.Expire, expired);
+        store.on(MemorizeEventType.Delete, deleted);
+        store.set('/users', entry(), 1000);
+
+        store.dispose();
+        jest.advanceTimersByTime(2000);
+
+        expect(store.size()).toBe(0);
+        expect(store.byteSize()).toBe(0);
+        expect(expired).not.toHaveBeenCalled();
+        expect(deleted).not.toHaveBeenCalled();
+        expect(jest.getTimerCount()).toBe(0);
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+  });
+
   describe('listener error isolation', () => {
     it('a throwing listener does not break the operation or later listeners', () => {
       const error = jest.spyOn(console, 'error').mockImplementation(() => undefined);

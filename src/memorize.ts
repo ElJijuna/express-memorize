@@ -398,6 +398,16 @@ export function memorize(options: MemorizeOptions = {}): Memorize {
   };
 
   cache.on = store.on.bind(store) as Memorize['on'];
+  cache.off = store.off.bind(store) as Memorize['off'];
+
+  cache.dispose = (): void => {
+    mutationEpoch++;
+    keyVersions.clear();
+    inFlightRemember.clear();
+    workerSerializer?.dispose();
+    store.dispose?.();
+  };
+
   cache.size = () => store.size();
   cache.byteSize = () => store.byteSize();
   cache.getStats = () => store.getStats();

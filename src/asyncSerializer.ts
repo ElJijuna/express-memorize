@@ -289,6 +289,17 @@ export class WorkerAsyncSerializer {
       this._slots.splice(index, 1);
     }
   }
+
+  /**
+   * Terminates every worker immediately. Pending requests are rejected.
+   * The serializer must not be used after disposal.
+   */
+  dispose(): void {
+    for (const slot of [...this._slots]) {
+      this._rejectAll(slot, new Error('[express-memorize] async serializer disposed'));
+      void slot.worker.terminate();
+    }
+  }
 }
 
 export function createWorkerAsyncSerializer(

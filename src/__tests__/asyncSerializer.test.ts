@@ -63,6 +63,12 @@ class ThrowingWorker extends FakeWorker {
   }
 }
 
+class SilentWorker extends FakeWorker {
+  postMessage(): void {
+    // Never responds, leaving the request pending.
+  }
+}
+
 function withWorkerCtor(serializer: WorkerAsyncSerializer, workerCtor: unknown): void {
   (serializer as unknown as { _WorkerCtor: unknown })._WorkerCtor = workerCtor;
 }
@@ -87,6 +93,25 @@ describe('WorkerAsyncSerializer', () => {
 
     expect(typeof serialized).toBe('string');
     await expect(serializer.deserialize(serialized)).resolves.toEqual({ ok: true });
+  });
+
+  it('dispose() terminates workers and rejects pending requests', async () => {
+    const serializer = new WorkerAsyncSerializer('json', 1);
+
+    withWorkerCtor(serializer, SilentWorker);
+
+    const pending = serializer.serialize({ ok: true });
+
+    serializer.dispose();
+
+    await expect(pending).rejects.toThrow('async serializer disposed');
+    expect(FakeWorker.instances[0]?.terminate).toHaveBeenCalledTimes(1);
+  });
+
+  it('dispose() is a no-op when no worker was ever started', () => {
+    const serializer = new WorkerAsyncSerializer('json', 1);
+
+    expect(() => serializer.dispose()).not.toThrow();
   });
 
   it('round-trips v8 values directly', async () => {

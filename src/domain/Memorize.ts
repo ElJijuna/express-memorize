@@ -288,19 +288,49 @@ export interface Memorize {
    * | `MemorizeEventType.Expire` | An entry's TTL elapses |
    * | `MemorizeEventType.Empty` | The last entry is removed, cache is now empty |
    *
+   * Returns a function that unregisters the listener.
+   *
    * @example
    * ```ts
    * cache.on(MemorizeEventType.Set,    (e) => console.log('stored',  e.key));
    * cache.on(MemorizeEventType.Delete, (e) => console.log('deleted', e.key));
    * cache.on(MemorizeEventType.Expire, (e) => console.log('expired', e.key));
    * cache.on(MemorizeEventType.Empty,  ()  => console.log('cache is empty'));
+   *
+   * const unsubscribe = cache.on(MemorizeEventType.Set, handler);
+   * unsubscribe(); // same as cache.off(MemorizeEventType.Set, handler)
    * ```
    */
-  on(event: MemorizeEventType.Set, handler: (e: MemorizeSetEvent) => void): void;
-  on(event: MemorizeEventType.Delete, handler: (e: MemorizeDeleteEvent) => void): void;
-  on(event: MemorizeEventType.Expire, handler: (e: MemorizeExpireEvent) => void): void;
-  on(event: MemorizeEventType.Empty, handler: (e: MemorizeEmptyEvent) => void): void;
-  on(event: MemorizeEventType.Evict, handler: (e: MemorizeEvictEvent) => void): void;
+  on(event: MemorizeEventType.Set, handler: (e: MemorizeSetEvent) => void): () => void;
+  on(event: MemorizeEventType.Delete, handler: (e: MemorizeDeleteEvent) => void): () => void;
+  on(event: MemorizeEventType.Expire, handler: (e: MemorizeExpireEvent) => void): () => void;
+  on(event: MemorizeEventType.Empty, handler: (e: MemorizeEmptyEvent) => void): () => void;
+  on(event: MemorizeEventType.Evict, handler: (e: MemorizeEvictEvent) => void): () => void;
+
+  /**
+   * Unregisters a listener previously registered with {@link on}. The handler
+   * must be the same function reference. Unknown handlers are ignored.
+   */
+  off(event: MemorizeEventType.Set, handler: (e: MemorizeSetEvent) => void): void;
+  off(event: MemorizeEventType.Delete, handler: (e: MemorizeDeleteEvent) => void): void;
+  off(event: MemorizeEventType.Expire, handler: (e: MemorizeExpireEvent) => void): void;
+  off(event: MemorizeEventType.Empty, handler: (e: MemorizeEmptyEvent) => void): void;
+  off(event: MemorizeEventType.Evict, handler: (e: MemorizeEvictEvent) => void): void;
+
+  /**
+   * Releases every resource held by the cache instance: the expiry timer, all
+   * event listeners, worker threads used by `asyncSerializer: 'worker'`, and —
+   * for SQLite storage — the database handle (persisted entries are kept on disk).
+   *
+   * Call it in tests and graceful shutdowns. The instance must not be used
+   * after disposal.
+   *
+   * @example
+   * ```ts
+   * afterEach(() => cache.dispose());
+   * ```
+   */
+  dispose(): void;
 
   /**
    * Returns the number of active (non-expired) cache entries.
