@@ -1,3 +1,4 @@
+import { clearTimeout as timerClearTimeout, setTimeout as timerSetTimeout } from 'node:timers';
 import type { CacheEntry } from './domain/CacheEntry';
 import type { CacheInfo } from './domain/CacheInfo';
 import type { MemorizeBatchOptions } from './domain/MemorizeBatchOptions';
@@ -123,12 +124,13 @@ function decodeBody(body: Buffer | Uint8Array | string, bodyEncoding: BodyEncodi
 
 export class SqliteMemorizeStore implements MemorizeStoreLike {
   private readonly _db: SqliteDatabase;
+  private readonly _statements = new Map<string, SqliteStatement>();
   private readonly _maxEntries?: number;
   private readonly _maxValueBytes?: number;
   private readonly _maxTotalBytes?: number;
   private readonly _sizeLimitAction: 'skip' | 'throw';
   private _accessCounter = Date.now();
-  private _expiryTimer: ReturnType<typeof setTimeout> | null = null;
+  private _expiryTimer: ReturnType<typeof timerSetTimeout> | null = null;
   private _nextExpiryAt: number | null = null;
   private _nextExpiryKey: string | null = null;
   private _listeners: ListenerMap = {
@@ -156,6 +158,7 @@ export class SqliteMemorizeStore implements MemorizeStoreLike {
     this._sizeLimitAction = options.sizeLimitAction ?? 'skip';
 
     this._db.exec(`
+      PRAGMA journal_mode = WAL;
       CREATE TABLE IF NOT EXISTS cache_entries (
         key TEXT PRIMARY KEY,
         body BLOB NOT NULL,
@@ -196,11 +199,7 @@ export class SqliteMemorizeStore implements MemorizeStoreLike {
       return;
     }
 
-    const removed = this._getRow(key);
-
-    if (removed) {
-      this._deleteRow(key);
-    }
+    const removed = this._deleteRow(key);
 
     if (this._maxEntries && this._countRows() >= this._maxEntries) {
       this._evictLRU();
@@ -217,25 +216,23 @@ export class SqliteMemorizeStore implements MemorizeStoreLike {
     const { expiresAt } = normalizeTtl(ttl);
     const encoded = encodeBody(entry.body);
 
-    this._db
-      .prepare(
-        `
+    this._prepare(
+      `
         INSERT OR REPLACE INTO cache_entries
           (key, body, body_encoding, status_code, content_type, expires_at, hits, size, last_accessed)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
-      )
-      .run(
-        key,
-        encoded.body,
-        encoded.bodyEncoding,
-        entry.statusCode,
-        entry.contentType,
-        expiresAt,
-        1,
-        size,
-        this._nextAccessed(),
-      );
+    ).run(
+      key,
+      encoded.body,
+      encoded.bodyEncoding,
+      entry.statusCode,
+      entry.contentType,
+      expiresAt,
+      1,
+      size,
+      this._nextAccessed(),
+    );
 
     this._emit(MemorizeEventType.Set, {
       type: MemorizeEventType.Set,
@@ -266,7 +263,7 @@ export class SqliteMemorizeStore implements MemorizeStoreLike {
     this._evictExpiredEntries();
 
     const result: Record<string, CacheInfo> = {};
-    const rows = this._db.prepare('SELECT * FROM cache_entries ORDER BY last_accessed ASC').all();
+    const rows = this._prepare('SELECT * FROM cache_entries ORDER BY last_accessed ASC').all();
 
     for (const row of rows) {
       const stored = row as StoredRow;
@@ -281,7 +278,7 @@ export class SqliteMemorizeStore implements MemorizeStoreLike {
   async getAllAsync(options?: MemorizeBatchOptions): Promise<Record<string, CacheInfo>> {
     const batchSize = normalizeBatchSize(options);
     const result: Record<string, CacheInfo> = {};
-    const rows = this._db.prepare('SELECT * FROM cache_entries ORDER BY last_accessed ASC').all();
+    const rows = this._prepare('SELECT * FROM cache_entries ORDER BY last_accessed ASC').all();
 
     let scanned = 0;
     let expired = false;
@@ -312,7 +309,7 @@ export class SqliteMemorizeStore implements MemorizeStoreLike {
   }
 
   delete(key: string): boolean {
-    if (!this._getRow(key)) {
+    if (!this._hasRow(key)) {
       return false;
     }
 
@@ -346,7 +343,7 @@ export class SqliteMemorizeStore implements MemorizeStoreLike {
     let scanned = 0;
 
     for (const key of keys) {
-      if (regex.test(key) && this._getRow(key)) {
+      if (regex.test(key) && this._hasRow(key)) {
         this._evict(key, MemorizeEventType.Delete);
         count++;
       }
@@ -380,7 +377,7 @@ export class SqliteMemorizeStore implements MemorizeStoreLike {
       }
 
       for (const key of keys) {
-        if (this._getRow(key)) {
+        if (this._hasRow(key)) {
           this._evict(key, MemorizeEventType.Delete);
           count++;
         }
@@ -439,20 +436,36 @@ export class SqliteMemorizeStore implements MemorizeStoreLike {
 
     if (touch) {
       entry.hits++;
-      this._db
-        .prepare('UPDATE cache_entries SET hits = ?, last_accessed = ? WHERE key = ?')
-        .run(entry.hits, this._nextAccessed(), key);
+      this._prepare('UPDATE cache_entries SET hits = ?, last_accessed = ? WHERE key = ?').run(
+        entry.hits,
+        this._nextAccessed(),
+        key,
+      );
     }
 
     return entry;
   }
 
+  private _prepare(sql: string): SqliteStatement {
+    let statement = this._statements.get(sql);
+
+    if (!statement) {
+      statement = this._db.prepare(sql);
+      this._statements.set(sql, statement);
+    }
+
+    return statement;
+  }
+
   private _getRow(key: string): StoredRow | null {
     return (
-      (this._db
-        .prepare('SELECT * FROM cache_entries WHERE key = ?')
-        .get(key) as StoredRow | null) ?? null
+      (this._prepare('SELECT * FROM cache_entries WHERE key = ?').get(key) as StoredRow | null) ??
+      null
     );
+  }
+
+  private _hasRow(key: string): boolean {
+    return this._prepare('SELECT 1 FROM cache_entries WHERE key = ?').get(key) !== undefined;
   }
 
   private _rowToEntry(row: StoredRow): CacheEntry {
@@ -471,14 +484,13 @@ export class SqliteMemorizeStore implements MemorizeStoreLike {
       limit === undefined
         ? 'SELECT key FROM cache_entries ORDER BY last_accessed ASC'
         : 'SELECT key FROM cache_entries ORDER BY last_accessed ASC LIMIT ?';
-    const rows =
-      limit === undefined ? this._db.prepare(sql).all() : this._db.prepare(sql).all(limit);
+    const rows = limit === undefined ? this._prepare(sql).all() : this._prepare(sql).all(limit);
 
     return rows.map((row) => (row as { key: string }).key);
   }
 
   private _countRows(): number {
-    const row = this._db.prepare('SELECT COUNT(*) AS count FROM cache_entries').get() as {
+    const row = this._prepare('SELECT COUNT(*) AS count FROM cache_entries').get() as {
       count: number;
     };
 
@@ -486,9 +498,7 @@ export class SqliteMemorizeStore implements MemorizeStoreLike {
   }
 
   private _sumByteSize(): number {
-    const row = this._db
-      .prepare('SELECT COALESCE(SUM(size), 0) AS size FROM cache_entries')
-      .get() as {
+    const row = this._prepare('SELECT COALESCE(SUM(size), 0) AS size FROM cache_entries').get() as {
       size: number;
     };
 
@@ -496,9 +506,9 @@ export class SqliteMemorizeStore implements MemorizeStoreLike {
   }
 
   private _maxLastAccessed(): number {
-    const row = this._db
-      .prepare('SELECT COALESCE(MAX(last_accessed), 0) AS lastAccessed FROM cache_entries')
-      .get() as { lastAccessed: number };
+    const row = this._prepare(
+      'SELECT COALESCE(MAX(last_accessed), 0) AS lastAccessed FROM cache_entries',
+    ).get() as { lastAccessed: number };
 
     return row.lastAccessed;
   }
@@ -510,7 +520,7 @@ export class SqliteMemorizeStore implements MemorizeStoreLike {
   }
 
   private _deleteRow(key: string): boolean {
-    return (this._db.prepare('DELETE FROM cache_entries WHERE key = ?').run(key).changes ?? 0) > 0;
+    return (this._prepare('DELETE FROM cache_entries WHERE key = ?').run(key).changes ?? 0) > 0;
   }
 
   private _canStoreSize(size: number, limit: number | undefined, limitName: string): boolean {
@@ -555,11 +565,9 @@ export class SqliteMemorizeStore implements MemorizeStoreLike {
   }
 
   private _scheduleNextExpiry(): void {
-    const row = this._db
-      .prepare(
-        'SELECT key, expires_at FROM cache_entries WHERE expires_at IS NOT NULL ORDER BY expires_at ASC LIMIT 1',
-      )
-      .get() as { key: string; expires_at: number } | null;
+    const row = this._prepare(
+      'SELECT key, expires_at FROM cache_entries WHERE expires_at IS NOT NULL ORDER BY expires_at ASC LIMIT 1',
+    ).get() as { key: string; expires_at: number } | null;
 
     this._scheduleExpiryAt(row?.key ?? null, row?.expires_at ?? null);
   }
@@ -590,14 +598,17 @@ export class SqliteMemorizeStore implements MemorizeStoreLike {
     }
 
     const delay = Math.max(0, nextExpiryAt - Date.now());
-    const timer = setTimeout(() => {
+    const timer = (globalThis.setTimeout ?? timerSetTimeout)(() => {
       this._expiryTimer = null;
       this._nextExpiryKey = null;
       this._nextExpiryAt = null;
       this._evictExpiredEntries();
     }, delay);
 
-    timer.unref();
+    if (typeof timer === 'object' && 'unref' in timer) {
+      timer.unref();
+    }
+
     this._expiryTimer = timer;
   }
 
@@ -606,14 +617,14 @@ export class SqliteMemorizeStore implements MemorizeStoreLike {
       return;
     }
 
-    clearTimeout(this._expiryTimer);
+    (globalThis.clearTimeout ?? timerClearTimeout)(this._expiryTimer);
     this._expiryTimer = null;
   }
 
   private _evictExpiredEntries(): void {
-    const rows = this._db
-      .prepare('SELECT key FROM cache_entries WHERE expires_at IS NOT NULL AND expires_at <= ?')
-      .all(Date.now());
+    const rows = this._prepare(
+      'SELECT key FROM cache_entries WHERE expires_at IS NOT NULL AND expires_at <= ?',
+    ).all(Date.now());
 
     let expired = false;
 
@@ -644,7 +655,11 @@ export class SqliteMemorizeStore implements MemorizeStoreLike {
 
   private _emit(event: MemorizeEventType, payload: MemorizeEvent): void {
     for (const handler of this._listeners[event] as Array<(e: MemorizeEvent) => void>) {
-      handler(payload);
+      try {
+        handler(payload);
+      } catch (error) {
+        console.error(`[express-memorize] "${event}" event listener threw`, error);
+      }
     }
   }
 

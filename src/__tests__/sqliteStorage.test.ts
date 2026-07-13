@@ -1,6 +1,7 @@
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { setImmediate } from 'node:timers';
 import { MemorizeEventType } from '../domain/MemorizeEventType';
 import { memorize } from '../memorize';
 import {

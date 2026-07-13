@@ -640,7 +640,11 @@ export class MemorizeStore implements MemorizeStoreLike {
 
   private _emit(event: MemorizeEventType, payload: MemorizeEvent): void {
     for (const handler of this._listeners[event] as Array<(e: MemorizeEvent) => void>) {
-      handler(payload);
+      try {
+        handler(payload);
+      } catch (error) {
+        console.error(`[express-memorize] "${event}" event listener threw`, error);
+      }
     }
   }
 

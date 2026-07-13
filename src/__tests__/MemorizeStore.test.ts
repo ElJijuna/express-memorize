@@ -222,6 +222,43 @@ describe('MemorizeStore', () => {
     });
   });
 
+  describe('listener error isolation', () => {
+    it('a throwing listener does not break the operation or later listeners', () => {
+      const error = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+      const second = jest.fn();
+
+      store.on(MemorizeEventType.Set, () => {
+        throw new Error('listener boom');
+      });
+      store.on(MemorizeEventType.Set, second);
+
+      try {
+        expect(() => store.set('/users', entry())).not.toThrow();
+        expect(store.get('/users')).not.toBeNull();
+        expect(second).toHaveBeenCalledTimes(1);
+        expect(error).toHaveBeenCalled();
+      } finally {
+        error.mockRestore();
+      }
+    });
+
+    it('a throwing delete listener does not prevent removal', () => {
+      const error = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+
+      store.on(MemorizeEventType.Delete, () => {
+        throw new Error('listener boom');
+      });
+      store.set('/users', entry());
+
+      try {
+        expect(store.delete('/users')).toBe(true);
+        expect(store.get('/users')).toBeNull();
+      } finally {
+        error.mockRestore();
+      }
+    });
+  });
+
   describe('delete', () => {
     it('removes an existing entry and returns true', () => {
       store.set('/users', entry());
