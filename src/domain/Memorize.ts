@@ -9,6 +9,33 @@ export interface DeleteMatchingOptions {
   exactMatch?: boolean;
 }
 
+/**
+ * Options accepted by {@link Memorize.set}, {@link Memorize.setAsync},
+ * {@link Memorize.remember}, and {@link Memorize.rememberAsync} in place of a
+ * plain TTL number.
+ */
+export interface MemorizeSetOptions {
+  /** Time-to-live in milliseconds. Defaults to the global TTL. */
+  ttl?: number;
+  /**
+   * Invalidation tags attached to the entry. All entries carrying a tag can be
+   * removed at once with {@link Memorize.deleteByTag}.
+   */
+  tags?: string[];
+  /**
+   * Length of the stale window in milliseconds (stale-while-revalidate).
+   *
+   * After `ttl` elapses the entry becomes *stale* but remains servable for this
+   * many additional milliseconds. During the stale window, {@link Memorize.remember}
+   * and {@link Memorize.rememberAsync} return the stale value immediately and run
+   * the factory **in the background** to refresh the entry. After the window
+   * closes the entry is evicted and the next read is a regular miss.
+   *
+   * Only meaningful with a finite `ttl`.
+   */
+  staleWhileRevalidate?: number;
+}
+
 import type { MemorizeDeleteEvent } from './MemorizeDeleteEvent';
 import type { MemorizeEmptyEvent } from './MemorizeEmptyEvent';
 import type { MemorizeEventType } from './MemorizeEventType';
