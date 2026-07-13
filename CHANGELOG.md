@@ -1,3 +1,10 @@
+# [2.8.0](https://github.com/ElJijuna/express-memorize/compare/v2.7.0...v2.8.0) (2026-07-01)
+
+
+### Features
+
+* add SqliteMemorizeStore for persistent caching with SQLite ([a6a92b0](https://github.com/ElJijuna/express-memorize/commit/a6a92b0613836125f0a18c7aea5abe22afb6419d))
+
 # [2.7.0](https://github.com/ElJijuna/express-memorize/compare/v2.6.0...v2.7.0) (2026-06-25)
 
 
