@@ -14,4 +14,12 @@ export interface CacheEntry {
   hits: number;
   /** Approximate size of the cached body in bytes. */
   size: number;
+  /**
+   * Unix timestamp (ms) after which the entry is considered stale but still
+   * servable while a background refresh runs (stale-while-revalidate).
+   * `null` or absent when the entry has no stale window.
+   */
+  staleAt?: number | null;
+  /** Invalidation tags attached to the entry. See `deleteByTag`. */
+  tags?: string[];
 }
