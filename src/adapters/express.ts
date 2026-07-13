@@ -42,14 +42,14 @@ export function createExpressMiddleware(
         return;
       }
 
-      if (callOptions?.noCache) {
+      if (callOptions?.noCache || callOptions?.shouldCache?.(req, res) === false) {
         res.setHeader('X-Cache', 'BYPASS');
         next();
 
         return;
       }
 
-      const key = req.originalUrl;
+      const key = callOptions?.key ? callOptions.key(req) : req.originalUrl;
       const cached = store.getRaw(key);
 
       if (cached) {

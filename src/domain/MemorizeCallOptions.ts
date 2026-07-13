@@ -1,3 +1,5 @@
+import type { Request, Response } from 'express';
+
 /**
  * Options passed when invoking `cache()` to create a route-level middleware.
  *
@@ -21,4 +23,28 @@ export interface MemorizeCallOptions {
    * global `app.use(cache())` is in place but a specific route should never be cached.
    */
   noCache?: boolean;
+  /**
+   * Custom cache key extractor. Defaults to `req.originalUrl` (which includes
+   * the query string).
+   *
+   * @example
+   * ```ts
+   * // Ignore the query string
+   * app.get('/users', cache({ key: (req) => req.path }), handler);
+   * ```
+   */
+  key?: (req: Request) => string;
+  /**
+   * Predicate evaluated once per request, before the cache is read. When it
+   * returns `false` the middleware skips both reading from and writing to the
+   * cache for that request and sets `X-Cache: BYPASS`.
+   *
+   * Useful to keep per-user responses out of a shared cache:
+   *
+   * @example
+   * ```ts
+   * app.use(cache({ shouldCache: (req) => !req.headers.authorization }));
+   * ```
+   */
+  shouldCache?: (req: Request, res: Response) => boolean;
 }

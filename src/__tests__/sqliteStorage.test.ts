@@ -267,7 +267,20 @@ describe('SQLite storage', () => {
         maxValueBytes: null,
         maxTotalBytes: null,
         byteSize: 6,
+        hits: 0,
+        misses: 0,
+        hitRatio: null,
       });
+    });
+
+    it('getStats() tracks hits and misses per instance', () => {
+      const cache = memorize({ storage: { type: 'sqlite', directory } });
+
+      cache._store.set('/a', { body: 'a', statusCode: 200, contentType: 'text/plain' });
+      cache._store.getRaw('/a');
+      cache._store.getRaw('/missing');
+
+      expect(cache.getStats()).toMatchObject({ hits: 1, misses: 1, hitRatio: 0.5 });
     });
 
     it('honors maxValueBytes skip and throw modes', () => {

@@ -97,6 +97,8 @@ export class MemorizeStore implements MemorizeStoreLike {
   private _nextExpiryAt: number | null = null;
   private _nextExpiryKey: string | null = null;
   private _totalByteSize = 0;
+  private _hits = 0;
+  private _misses = 0;
   private _listeners: ListenerMap = {
     [MemorizeEventType.Set]: [],
     [MemorizeEventType.Delete]: [],
@@ -448,12 +450,17 @@ export class MemorizeStore implements MemorizeStoreLike {
    * Returns aggregate cache statistics.
    */
   getStats(): MemorizeStats {
+    const lookups = this._hits + this._misses;
+
     return {
       entries: this._store.size,
       maxEntries: this._maxEntries ?? null,
       maxValueBytes: this._maxValueBytes ?? null,
       maxTotalBytes: this._maxTotalBytes ?? null,
       byteSize: this._totalByteSize,
+      hits: this._hits,
+      misses: this._misses,
+      hitRatio: lookups === 0 ? null : this._hits / lookups,
     };
   }
 
@@ -469,11 +476,14 @@ export class MemorizeStore implements MemorizeStoreLike {
     const entry = this._store.get(key);
 
     if (!entry) {
+      this._misses++;
+
       return null;
     }
 
     if (entry.expiresAt && Date.now() >= entry.expiresAt) {
       this._evict(key, MemorizeEventType.Expire);
+      this._misses++;
 
       return null;
     }
@@ -483,6 +493,7 @@ export class MemorizeStore implements MemorizeStoreLike {
     this._store.set(key, entry);
 
     entry.hits++;
+    this._hits++;
 
     return entry;
   }

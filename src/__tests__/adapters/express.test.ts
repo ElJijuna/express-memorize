@@ -97,4 +97,67 @@ describe('createExpressAdapter (express-memorize/express)', () => {
     expect(responseHeaders['X-Cache']).toBe('BYPASS');
     expect(next).toHaveBeenCalledTimes(1);
   });
+
+  it('uses a custom key extractor when provided', () => {
+    const cache = memorize();
+    const handler = createExpressAdapter(cache, {
+      key: (req) => req.originalUrl.split('?')[0] ?? req.originalUrl,
+    });
+    const { req, res, next } = createMockReqRes('/users?page=1');
+
+    handler(req, res, next);
+    res.json({ data: [] });
+
+    // Different query string, same extracted key → served from cache
+    const {
+      req: req2,
+      res: res2,
+      next: next2,
+      responseHeaders: h2,
+    } = createMockReqRes('/users?page=2');
+
+    handler(req2, res2, next2);
+    expect(h2['X-Cache']).toBe('HIT');
+    expect(next2).not.toHaveBeenCalled();
+    expect(cache.get('/users')).not.toBeNull();
+  });
+
+  it('bypasses the cache when shouldCache returns false', () => {
+    const cache = memorize();
+    const handler = createExpressAdapter(cache, { shouldCache: () => false });
+    const { req, res, next, responseHeaders } = createMockReqRes();
+
+    handler(req, res, next);
+
+    expect(responseHeaders['X-Cache']).toBe('BYPASS');
+    expect(next).toHaveBeenCalledTimes(1);
+
+    res.json({ data: [] });
+    expect(cache.size()).toBe(0);
+  });
+
+  it('caches normally when shouldCache returns true', () => {
+    const cache = memorize();
+    const handler = createExpressAdapter(cache, { shouldCache: () => true });
+    const { req, res, next } = createMockReqRes();
+
+    handler(req, res, next);
+    res.json({ data: [] });
+
+    const { req: req2, res: res2, next: next2, responseHeaders: h2 } = createMockReqRes();
+
+    handler(req2, res2, next2);
+    expect(h2['X-Cache']).toBe('HIT');
+    expect(next2).not.toHaveBeenCalled();
+  });
+
+  it('passes the request and response to shouldCache', () => {
+    const cache = memorize();
+    const shouldCache = jest.fn().mockReturnValue(true);
+    const handler = createExpressAdapter(cache, { shouldCache });
+    const { req, res, next } = createMockReqRes();
+
+    handler(req, res, next);
+    expect(shouldCache).toHaveBeenCalledWith(req, res);
+  });
 });

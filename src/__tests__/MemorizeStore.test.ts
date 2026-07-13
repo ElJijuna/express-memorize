@@ -726,6 +726,31 @@ describe('MemorizeStore', () => {
       expect(stats.maxTotalBytes).toBe(20);
     });
 
+    it('getStats() tracks hits, misses, and hitRatio', () => {
+      expect(store.getStats()).toMatchObject({ hits: 0, misses: 0, hitRatio: null });
+
+      store.set('/a', entry('x'));
+      store.getRaw('/a');
+      store.getRaw('/a');
+      store.getRaw('/missing');
+
+      expect(store.getStats()).toMatchObject({ hits: 2, misses: 1, hitRatio: 2 / 3 });
+    });
+
+    it('getStats() counts an expired lookup as a miss', () => {
+      jest.useFakeTimers();
+
+      try {
+        store.set('/a', entry('x'), 1000);
+        jest.setSystemTime(Date.now() + 1001);
+
+        expect(store.getRaw('/a')).toBeNull();
+        expect(store.getStats()).toMatchObject({ hits: 0, misses: 1 });
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
     it('CacheInfo includes size field', () => {
       store.set('/a', entry('hello'));
       const info = store.get('/a');

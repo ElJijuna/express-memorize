@@ -130,6 +130,8 @@ export class SqliteMemorizeStore implements MemorizeStoreLike {
   private readonly _maxTotalBytes?: number;
   private readonly _sizeLimitAction: 'skip' | 'throw';
   private _accessCounter = Date.now();
+  private _hits = 0;
+  private _misses = 0;
   private _expiryTimer: ReturnType<typeof timerSetTimeout> | null = null;
   private _nextExpiryAt: number | null = null;
   private _nextExpiryKey: string | null = null;
@@ -406,17 +408,30 @@ export class SqliteMemorizeStore implements MemorizeStoreLike {
   getStats(): MemorizeStats {
     this._evictExpiredEntries();
 
+    const lookups = this._hits + this._misses;
+
     return {
       entries: this._countRows(),
       maxEntries: this._maxEntries ?? null,
       maxValueBytes: this._maxValueBytes ?? null,
       maxTotalBytes: this._maxTotalBytes ?? null,
       byteSize: this._sumByteSize(),
+      hits: this._hits,
+      misses: this._misses,
+      hitRatio: lookups === 0 ? null : this._hits / lookups,
     };
   }
 
   getRaw(key: string): CacheEntry | null {
-    return this._getActiveEntry(key, true);
+    const entry = this._getActiveEntry(key, true);
+
+    if (entry) {
+      this._hits++;
+    } else {
+      this._misses++;
+    }
+
+    return entry;
   }
 
   private _getActiveEntry(key: string, touch: boolean): CacheEntry | null {

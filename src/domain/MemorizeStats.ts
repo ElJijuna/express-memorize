@@ -12,4 +12,10 @@ export interface MemorizeStats {
   maxTotalBytes: number | null;
   /** Approximate total byte size of all cached bodies. */
   byteSize: number;
+  /** Number of cache lookups that returned a value since this instance was created. */
+  hits: number;
+  /** Number of cache lookups that found no entry (missing or expired) since this instance was created. */
+  misses: number;
+  /** `hits / (hits + misses)`, or `null` when no lookups have happened yet. */
+  hitRatio: number | null;
 }

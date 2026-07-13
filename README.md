@@ -348,6 +348,25 @@ app.get('/live-feed', cache({ noCache: true }), handler);
 // Sets X-Cache: BYPASS, never reads or writes the cache
 ```
 
+### Custom cache key
+
+```typescript
+// Default key is req.originalUrl (includes the query string).
+app.get('/users', cache({ key: (req) => req.path }), handler);
+// Now /users?page=1 and /users?page=2 share one cache entry
+```
+
+### Conditional caching
+
+```typescript
+// Keep per-user responses out of the shared cache.
+// When shouldCache returns false the request bypasses the cache entirely
+// (no read, no write) and gets X-Cache: BYPASS.
+app.use(cache({ shouldCache: (req) => !req.headers.authorization }));
+```
+
+> ⚠️ The cache key is the URL, so authenticated or otherwise personalized responses stored in a shared cache would be served to every caller of that URL. Use `shouldCache` (or per-route mounting) to exclude them.
+
 ### Fastify route-level usage
 
 ```typescript
@@ -500,10 +519,13 @@ const cache = memorize({
 ```typescript
 cache.size();      // number of active entries
 cache.byteSize();  // approximate total body size in bytes
-cache.getStats();  // { entries, maxEntries, maxValueBytes, maxTotalBytes, byteSize }
+cache.getStats();  // { entries, maxEntries, maxValueBytes, maxTotalBytes, byteSize,
+                   //   hits, misses, hitRatio }
 ```
 
 > `byteSize()` is an estimate based on UTF-8 encoding for strings and `byteLength` for buffers. It may not reflect actual VM memory usage.
+
+`hits` / `misses` count value lookups (middleware reads, `getValue`, `remember`) since the instance was created; `hitRatio` is `hits / (hits + misses)`, or `null` before the first lookup.
 
 ### SQLite storage
 
@@ -598,6 +620,8 @@ Returns an Express `RequestHandler`. `cache()` is a backwards-compatible alias f
 |--------|------|---------|-------------|
 | `ttl` | `number` | global `ttl` | TTL override for this route. Pass `Infinity` for no expiry. |
 | `noCache` | `boolean` | `false` | Skip cache entirely. Sets `X-Cache: BYPASS`. |
+| `key` | `(req) => string` | `req.originalUrl` | Custom cache key extractor. |
+| `shouldCache` | `(req, res) => boolean` | — | Evaluated before the cache is read; return `false` to bypass the cache for that request (sets `X-Cache: BYPASS`). |
 
 ### Service-level cache methods
 
@@ -633,7 +657,7 @@ discarded instead of overwriting newer state.
 | `clearAsync` | `({ batchSize }?) => Promise<number>` | Async batched variant of `clear`. |
 | `size` | `() => number` | Number of active entries. |
 | `byteSize` | `() => number` | Approximate total body size in bytes. |
-| `getStats` | `() => MemorizeStats` | Aggregate stats: `{ entries, maxEntries, maxValueBytes, maxTotalBytes, byteSize }`. |
+| `getStats` | `() => MemorizeStats` | Aggregate stats: `{ entries, maxEntries, maxValueBytes, maxTotalBytes, byteSize, hits, misses, hitRatio }`. |
 
 ### Adapters
 
