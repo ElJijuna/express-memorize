@@ -121,7 +121,7 @@
     "jest": "^30.4.2",
     "koa": "^3.2.0",
     "semantic-release": "^25.0.5",
-    "super-configs": "^1.15.0",
+    "super-configs": "^1.16.0",
     "tinybench": "^6.0.2",
     "tsx": "^4.22.1",
     "typedoc": "^0.28.18",
