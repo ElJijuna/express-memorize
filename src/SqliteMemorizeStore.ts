@@ -55,6 +55,8 @@ interface StoredRow {
   hits: number;
   size: number;
   last_accessed: number;
+  stale_at: number | null;
+  tags: string | null;
 }
 
 export const SQLITE_STORAGE_WARNING =
@@ -176,6 +178,7 @@ export class SqliteMemorizeStore implements MemorizeStoreLike {
       CREATE INDEX IF NOT EXISTS idx_cache_entries_expires_at ON cache_entries(expires_at);
       CREATE INDEX IF NOT EXISTS idx_cache_entries_last_accessed ON cache_entries(last_accessed);
     `);
+    this._migrate();
     this._accessCounter = Math.max(Date.now(), this._maxLastAccessed());
     this._scheduleNextExpiry();
   }
