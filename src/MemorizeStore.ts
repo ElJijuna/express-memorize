@@ -37,7 +37,8 @@ type ListenerMap = {
   [MemorizeEventType.Evict]: Array<(e: MemorizeEvictEvent) => void>;
 };
 
-const DEFAULT_TTL = 60_000;
+export const DEFAULT_TTL = 60_000;
+
 const DEFAULT_BATCH_SIZE = 1_000;
 
 export function normalizeTtl(ttl?: number | null): { expiresAt: number | null } {
@@ -400,6 +401,28 @@ export class MemorizeStore implements MemorizeStoreLike {
   }
 
   /**
+   * Removes all cache entries carrying at least one of the given tags.
+   * Emits a {@link MemorizeEventType.Delete} event for each removed entry.
+   *
+   * @param tag - A tag or list of tags to match against entry tags.
+   * @returns The number of entries removed.
+   */
+  deleteByTag(tag: string | string[]): number {
+    const tags = Array.isArray(tag) ? tag : [tag];
+
+    let count = 0;
+
+    for (const [key, entry] of [...this._store]) {
+      if (entry.tags?.some((entryTag) => tags.includes(entryTag))) {
+        this._evict(key, MemorizeEventType.Delete);
+        count++;
+      }
+    }
+
+    return count;
+  }
+
+  /**
    * Removes all entries from the cache. Emits a {@link MemorizeEventType.Delete} event
    * for each entry.
    */
@@ -742,6 +765,8 @@ export class MemorizeStore implements MemorizeStoreLike {
       expiresAt: entry.expiresAt,
       hits: entry.hits,
       size: entry.size,
+      staleAt: entry.staleAt ?? null,
+      tags: entry.tags,
       remainingTtl: entry.expiresAt ? Math.max(0, entry.expiresAt - Date.now()) : null,
     };
   }
