@@ -47,4 +47,15 @@ export interface MemorizeCallOptions {
    * ```
    */
   shouldCache?: (req: Request, res: Response) => boolean;
+  /**
+   * Invalidation tags attached to every entry cached by this middleware.
+   * All tagged entries can be removed at once with `cache.deleteByTag(tag)`.
+   *
+   * @example
+   * ```ts
+   * app.get('/users', cache({ tags: ['users'] }), handler);
+   * // later: cache.deleteByTag('users');
+   * ```
+   */
+  tags?: string[];
 }

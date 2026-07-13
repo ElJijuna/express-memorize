@@ -160,4 +160,17 @@ describe('createExpressAdapter (express-memorize/express)', () => {
     handler(req, res, next);
     expect(shouldCache).toHaveBeenCalledWith(req, res);
   });
+
+  it('tags cached entries so routes can be invalidated with deleteByTag', () => {
+    const cache = memorize();
+    const handler = createExpressAdapter(cache, { tags: ['users'] });
+    const { req, res, next } = createMockReqRes('/users');
+
+    handler(req, res, next);
+    res.json({ data: [] });
+
+    expect(cache.get('/users')?.tags).toEqual(['users']);
+    expect(cache.deleteByTag('users')).toBe(1);
+    expect(cache.get('/users')).toBeNull();
+  });
 });

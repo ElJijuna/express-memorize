@@ -106,15 +106,17 @@ export interface Memorize {
    *
    * @param key - Cache key.
    * @param value - Value to cache.
-   * @param ttl - Time-to-live in milliseconds. Defaults to the global TTL.
+   * @param ttlOrOptions - Time-to-live in milliseconds, or a {@link MemorizeSetOptions}
+   * object (`ttl`, `tags`, `staleWhileRevalidate`). Defaults to the global TTL.
    *
    * @example
    * ```ts
    * cache.set('config', { theme: 'dark' });
    * cache.set('config', { theme: 'dark' }, 60_000);
+   * cache.set('users:1', user, { ttl: 60_000, tags: ['users'] });
    * ```
    */
-  set<T>(key: string, value: T, ttl?: number): void;
+  set<T>(key: string, value: T, ttlOrOptions?: number | MemorizeSetOptions): void;
 
   /**
    * Async variant of {@link set}. It yields back to the event loop before
@@ -123,9 +125,9 @@ export interface Memorize {
    *
    * @param key - Cache key.
    * @param value - Value to cache.
-   * @param ttl - Time-to-live in milliseconds. Defaults to the global TTL.
+   * @param ttlOrOptions - Time-to-live in milliseconds, or a {@link MemorizeSetOptions} object.
    */
-  setAsync<T>(key: string, value: T, ttl?: number): Promise<void>;
+  setAsync<T>(key: string, value: T, ttlOrOptions?: number | MemorizeSetOptions): Promise<void>;
 
   /**
    * Returns the cached value for the given key, or `undefined` if the key does
@@ -155,17 +157,31 @@ export interface Memorize {
    * Returns the cached value for the given key if it exists, otherwise calls
    * `factory`, caches the result, and returns it.
    *
+   * With `staleWhileRevalidate`, an expired-but-stale entry is returned
+   * immediately and the factory runs in the background to refresh it
+   * (concurrent stale reads trigger a single refresh).
+   *
    * @param key - Cache key.
    * @param factory - Async or sync function that produces the value on a cache miss.
-   * @param ttl - Time-to-live in milliseconds. Defaults to the global TTL.
+   * @param ttlOrOptions - Time-to-live in milliseconds, or a {@link MemorizeSetOptions}
+   * object (`ttl`, `tags`, `staleWhileRevalidate`). Defaults to the global TTL.
    *
    * @example
    * ```ts
    * const users = await cache.remember('users:list', () => userService.findAll());
    * const users = await cache.remember('users:list', () => userService.findAll(), 30_000);
+   * const users = await cache.remember('users:list', () => userService.findAll(), {
+   *   ttl: 30_000,
+   *   staleWhileRevalidate: 60_000,
+   *   tags: ['users'],
+   * });
    * ```
    */
-  remember<T>(key: string, factory: () => T | Promise<T>, ttl?: number): Promise<T>;
+  remember<T>(
+    key: string,
+    factory: () => T | Promise<T>,
+    ttlOrOptions?: number | MemorizeSetOptions,
+  ): Promise<T>;
 
   /**
    * Async variant of {@link remember}. It uses {@link getValueAsync} and
@@ -174,9 +190,13 @@ export interface Memorize {
    *
    * @param key - Cache key.
    * @param factory - Async or sync function that produces the value on a cache miss.
-   * @param ttl - Time-to-live in milliseconds. Defaults to the global TTL.
+   * @param ttlOrOptions - Time-to-live in milliseconds, or a {@link MemorizeSetOptions} object.
    */
-  rememberAsync<T>(key: string, factory: () => T | Promise<T>, ttl?: number): Promise<T>;
+  rememberAsync<T>(
+    key: string,
+    factory: () => T | Promise<T>,
+    ttlOrOptions?: number | MemorizeSetOptions,
+  ): Promise<T>;
 
   /**
    * Returns the {@link CacheInfo} for a specific cache key, or `null` if the key
@@ -233,6 +253,36 @@ export interface Memorize {
    * ```
    */
   delete(key: string): boolean;
+
+  /**
+   * Removes all cache entries carrying at least one of the given tags and emits
+   * a {@link MemorizeEventType.Delete} event for each removed entry.
+   *
+   * Tags are attached at write time via {@link MemorizeSetOptions.tags} or the
+   * middleware `tags` call option.
+   *
+   * @param tag - A tag or list of tags.
+   * @returns The number of entries removed.
+   *
+   * @example
+   * ```ts
+   * cache.set('users:1', alice, { tags: ['users'] });
+   * cache.set('users:2', bob,   { tags: ['users'] });
+   * cache.deleteByTag('users'); // → 2
+   * ```
+   */
+  deleteByTag(tag: string | string[]): number;
+
+  /**
+   * Async variant of {@link deleteByTag}. It removes matching entries in
+   * batches and yields back to the event loop between batches, which reduces
+   * long synchronous pauses on large stores.
+   *
+   * @param tag - A tag or list of tags.
+   * @param options - Batch options.
+   * @returns The number of entries removed.
+   */
+  deleteByTagAsync(tag: string | string[], options?: MemorizeBatchOptions): Promise<number>;
 
   /**
    * Removes all cache entries whose keys match the given glob pattern.

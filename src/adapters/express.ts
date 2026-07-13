@@ -67,7 +67,11 @@ export function createExpressMiddleware(
           const contentType =
             (res.getHeader('Content-Type') as string) ?? 'application/octet-stream';
 
-          store.set(key, { body, statusCode: res.statusCode, contentType }, effectiveTtl);
+          store.set(
+            key,
+            { body, statusCode: res.statusCode, contentType, tags: callOptions?.tags },
+            effectiveTtl,
+          );
         }
 
         res.setHeader('X-Cache', 'MISS');

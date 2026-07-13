@@ -283,6 +283,39 @@ describe('SQLite storage', () => {
       expect(cache.getStats()).toMatchObject({ hits: 1, misses: 1, hitRatio: 0.5 });
     });
 
+    it('persists tags and supports deleteByTag / deleteByTagAsync', async () => {
+      const cache = memorize({ storage: { type: 'sqlite', directory }, serializer: 'json' });
+
+      cache.set('users:1', 'alice', { tags: ['users'] });
+      cache.set('users:2', 'bob', { tags: ['users'] });
+      cache.set('posts:1', 'post', { tags: ['posts'] });
+      cache.set('plain', 'x');
+
+      expect(cache.get('users:1')?.tags).toEqual(['users']);
+      expect(cache.deleteByTag('users')).toBe(2);
+      await expect(cache.deleteByTagAsync('posts', { batchSize: 1 })).resolves.toBe(1);
+      expect(cache.getValue('plain')).toBe('x');
+    });
+
+    it('serves stale values during the stale-while-revalidate window', () => {
+      jest.useFakeTimers();
+
+      try {
+        const cache = memorize({ storage: { type: 'sqlite', directory }, serializer: 'json' });
+
+        cache.set('key', 'value', { ttl: 1000, staleWhileRevalidate: 5000 });
+        jest.advanceTimersByTime(1500);
+
+        expect(cache.getValue('key')).toBe('value');
+        expect(cache.get('key')?.staleAt).not.toBeNull();
+
+        jest.advanceTimersByTime(5000);
+        expect(cache.getValue('key')).toBeUndefined();
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
     it('dispose() closes the database while keeping persisted entries on disk', () => {
       const first = memorize({ storage: { type: 'sqlite', directory }, serializer: 'json' });
 

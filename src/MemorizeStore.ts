@@ -423,6 +423,37 @@ export class MemorizeStore implements MemorizeStoreLike {
   }
 
   /**
+   * Async variant of {@link deleteByTag} that yields between batches to
+   * reduce event-loop blocking on large stores.
+   *
+   * @param tag - A tag or list of tags to match against entry tags.
+   * @param options - Batch options.
+   * @returns The number of entries removed.
+   */
+  async deleteByTagAsync(tag: string | string[], options?: MemorizeBatchOptions): Promise<number> {
+    const tags = Array.isArray(tag) ? tag : [tag];
+    const batchSize = normalizeBatchSize(options);
+
+    let count = 0;
+    let scanned = 0;
+
+    for (const [key, entry] of [...this._store]) {
+      if (entry.tags?.some((entryTag) => tags.includes(entryTag)) && this._store.has(key)) {
+        this._evict(key, MemorizeEventType.Delete);
+        count++;
+      }
+
+      scanned++;
+
+      if (scanned % batchSize === 0) {
+        await yieldToEventLoop();
+      }
+    }
+
+    return count;
+  }
+
+  /**
    * Removes all entries from the cache. Emits a {@link MemorizeEventType.Delete} event
    * for each entry.
    */

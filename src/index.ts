@@ -9,7 +9,7 @@ export type {
   MemorizeSetEvent,
   MemorizeStats,
 } from './domain/index';
-export type { DeleteMatchingOptions, Memorize } from './domain/Memorize';
+export type { DeleteMatchingOptions, Memorize, MemorizeSetOptions } from './domain/Memorize';
 export { MemorizeEventType } from './domain/MemorizeEventType';
 export type { MemorizeCallOptions, MemorizeOptions, MemorizeStorageOptions } from './memorize';
 export { memorize } from './memorize';

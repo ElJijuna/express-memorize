@@ -1216,4 +1216,224 @@ describe('memorize middleware', () => {
       expect(() => cache.dispose()).not.toThrow();
     });
   });
+
+  describe('stale-while-revalidate', () => {
+    const swrOptions = { ttl: 1000, staleWhileRevalidate: 5000 };
+    const flushMicrotasks = async (): Promise<void> => {
+      for (let i = 0; i < 10; i++) {
+        await Promise.resolve();
+      }
+    };
+
+    beforeEach(() => jest.useFakeTimers());
+    afterEach(() => jest.useRealTimers());
+
+    it('set() keeps the value retrievable during the stale window', () => {
+      const cache = memorize();
+
+      cache.set('key', 'value', swrOptions);
+      jest.advanceTimersByTime(1500);
+
+      expect(cache.getValue('key')).toBe('value');
+      expect(cache.get('key')?.staleAt).not.toBeNull();
+
+      jest.advanceTimersByTime(5000);
+      expect(cache.getValue('key')).toBeUndefined();
+    });
+
+    it('remember() serves the stale value and refreshes in the background', async () => {
+      const cache = memorize();
+
+      await cache.remember('key', () => 'v1', swrOptions);
+      jest.advanceTimersByTime(1500);
+
+      const factory = jest.fn().mockResolvedValue('v2');
+      const stale = await cache.remember('key', factory, swrOptions);
+
+      expect(stale).toBe('v1');
+      expect(factory).toHaveBeenCalledTimes(1);
+
+      await flushMicrotasks();
+
+      expect(cache.getValue('key')).toBe('v2');
+    });
+
+    it('remember() does not refresh while the value is fresh', async () => {
+      const cache = memorize();
+
+      await cache.remember('key', () => 'v1', swrOptions);
+      jest.advanceTimersByTime(500);
+
+      const factory = jest.fn().mockResolvedValue('v2');
+
+      await expect(cache.remember('key', factory, swrOptions)).resolves.toBe('v1');
+      expect(factory).not.toHaveBeenCalled();
+    });
+
+    it('remember() falls back to a foreground miss after the stale window closes', async () => {
+      const cache = memorize();
+
+      await cache.remember('key', () => 'v1', swrOptions);
+      jest.advanceTimersByTime(6001);
+
+      const factory = jest.fn().mockResolvedValue('v2');
+
+      await expect(cache.remember('key', factory, swrOptions)).resolves.toBe('v2');
+      expect(factory).toHaveBeenCalledTimes(1);
+    });
+
+    it('concurrent stale reads trigger a single background refresh', async () => {
+      const cache = memorize();
+
+      await cache.remember('key', () => 'v1', swrOptions);
+      jest.advanceTimersByTime(1500);
+
+      let resolveFactory: (value: string) => void = () => undefined;
+
+      const factory = jest.fn(
+        () =>
+          new Promise<string>((resolve) => {
+            resolveFactory = resolve;
+          }),
+      );
+
+      await expect(cache.remember('key', factory, swrOptions)).resolves.toBe('v1');
+      await expect(cache.remember('key', factory, swrOptions)).resolves.toBe('v1');
+      expect(factory).toHaveBeenCalledTimes(1);
+
+      resolveFactory('v2');
+      await flushMicrotasks();
+
+      expect(cache.getValue('key')).toBe('v2');
+    });
+
+    it('keeps serving the stale value when the background refresh fails', async () => {
+      const error = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+
+      try {
+        const cache = memorize();
+
+        await cache.remember('key', () => 'v1', swrOptions);
+        jest.advanceTimersByTime(1500);
+
+        const failing = jest.fn().mockRejectedValue(new Error('backend down'));
+
+        await expect(cache.remember('key', failing, swrOptions)).resolves.toBe('v1');
+        await flushMicrotasks();
+
+        expect(error).toHaveBeenCalled();
+        expect(cache.getValue('key')).toBe('v1');
+      } finally {
+        error.mockRestore();
+      }
+    });
+
+    it('rememberAsync() serves the stale value and refreshes in the background', async () => {
+      // rememberAsync yields via setImmediate, so run with real timers and
+      // simulate the stale window by spying on Date.now instead.
+      jest.useRealTimers();
+
+      const cache = memorize();
+
+      await cache.rememberAsync('key', () => 'v1', swrOptions);
+
+      const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(Date.now() + 1500);
+
+      try {
+        const factory = jest.fn().mockResolvedValue('v2');
+
+        await expect(cache.rememberAsync('key', factory, swrOptions)).resolves.toBe('v1');
+        expect(factory).toHaveBeenCalledTimes(1);
+
+        await flushMicrotasks();
+
+        expect(cache.getValue('key')).toBe('v2');
+      } finally {
+        nowSpy.mockRestore();
+      }
+    });
+
+    it('an options object with only ttl behaves like a plain ttl number', () => {
+      const cache = memorize();
+
+      cache.set('key', 'value', { ttl: 1000 });
+      jest.advanceTimersByTime(1001);
+
+      expect(cache.getValue('key')).toBeUndefined();
+    });
+
+    it('rejects a negative staleWhileRevalidate', () => {
+      const cache = memorize();
+
+      expect(() => cache.set('key', 'value', { staleWhileRevalidate: -1 })).toThrow(RangeError);
+    });
+  });
+
+  describe('deleteByTag', () => {
+    it('removes entries carrying the tag and leaves the rest', () => {
+      const cache = memorize();
+
+      cache.set('users:1', 'alice', { tags: ['users'] });
+      cache.set('users:2', 'bob', { tags: ['users', 'admins'] });
+      cache.set('posts:1', 'post', { tags: ['posts'] });
+      cache.set('plain', 'x');
+
+      expect(cache.deleteByTag('users')).toBe(2);
+      expect(cache.getValue('users:1')).toBeUndefined();
+      expect(cache.getValue('users:2')).toBeUndefined();
+      expect(cache.getValue('posts:1')).toBe('post');
+      expect(cache.getValue('plain')).toBe('x');
+    });
+
+    it('accepts an array of tags', () => {
+      const cache = memorize();
+
+      cache.set('users:1', 'alice', { tags: ['users'] });
+      cache.set('posts:1', 'post', { tags: ['posts'] });
+      cache.set('plain', 'x');
+
+      expect(cache.deleteByTag(['users', 'posts'])).toBe(2);
+      expect(cache.getValue('plain')).toBe('x');
+    });
+
+    it('returns 0 when no entry matches', () => {
+      const cache = memorize();
+
+      cache.set('plain', 'x');
+
+      expect(cache.deleteByTag('missing')).toBe(0);
+    });
+
+    it('deleteByTagAsync removes tagged entries in batches', async () => {
+      const cache = memorize();
+
+      cache.set('users:1', 'alice', { tags: ['users'] });
+      cache.set('users:2', 'bob', { tags: ['users'] });
+      cache.set('plain', 'x');
+
+      await expect(cache.deleteByTagAsync('users', { batchSize: 1 })).resolves.toBe(2);
+      expect(cache.getValue('users:1')).toBeUndefined();
+      expect(cache.getValue('plain')).toBe('x');
+    });
+
+    it('exposes tags through get()', () => {
+      const cache = memorize();
+
+      cache.set('users:1', 'alice', { tags: ['users'] });
+
+      expect(cache.get('users:1')?.tags).toEqual(['users']);
+    });
+
+    it('emits a Delete event per removed entry', () => {
+      const cache = memorize();
+      const deleted = jest.fn();
+
+      cache.on(MemorizeEventType.Delete, deleted);
+      cache.set('users:1', 'alice', { tags: ['users'] });
+      cache.set('users:2', 'bob', { tags: ['users'] });
+      cache.deleteByTag('users');
+
+      expect(deleted).toHaveBeenCalledTimes(2);
+    });
+  });
 });

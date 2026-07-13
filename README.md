@@ -367,6 +367,35 @@ app.use(cache({ shouldCache: (req) => !req.headers.authorization }));
 
 > ⚠️ The cache key is the URL, so authenticated or otherwise personalized responses stored in a shared cache would be served to every caller of that URL. Use `shouldCache` (or per-route mounting) to exclude them.
 
+### Stale-while-revalidate
+
+`remember` / `rememberAsync` accept an options object with a `staleWhileRevalidate` window. After `ttl` elapses the entry becomes *stale* but is still returned instantly for up to `staleWhileRevalidate` ms while the factory re-runs **in the background** (concurrent stale reads trigger a single refresh). After the window closes the entry is evicted and the next read is a regular miss.
+
+```typescript
+const users = await cache.remember('users:list', () => userService.findAll(), {
+  ttl: 30_000,               // fresh for 30s
+  staleWhileRevalidate: 60_000, // then stale-but-served for up to 60s more
+});
+```
+
+`set` / `setAsync` accept the same options; a value written with `staleWhileRevalidate` stays readable through the stale window, and `CacheInfo.staleAt` tells you when it went stale. If a background refresh fails, the stale value keeps being served until the window closes and the error is logged.
+
+### Tag-based invalidation
+
+Attach `tags` when writing and invalidate whole groups at once — often more ergonomic than glob patterns:
+
+```typescript
+cache.set('users:1', alice, { tags: ['users'] });
+cache.set('users:2', bob,   { tags: ['users', 'admins'] });
+
+// Middleware entries can be tagged too:
+app.get('/users', cache({ tags: ['users'] }), handler);
+
+cache.deleteByTag('users');            // → removes all three
+cache.deleteByTag(['users', 'posts']); // multiple tags
+await cache.deleteByTagAsync('users', { batchSize: 500 }); // batched variant
+```
+
 ### Fastify route-level usage
 
 ```typescript
@@ -636,17 +665,21 @@ Returns an Express `RequestHandler`. `cache()` is a backwards-compatible alias f
 | `noCache` | `boolean` | `false` | Skip cache entirely. Sets `X-Cache: BYPASS`. |
 | `key` | `(req) => string` | `req.originalUrl` | Custom cache key extractor. |
 | `shouldCache` | `(req, res) => boolean` | — | Evaluated before the cache is read; return `false` to bypass the cache for that request (sets `X-Cache: BYPASS`). |
+| `tags` | `string[]` | — | Invalidation tags attached to every entry cached by this middleware. See `deleteByTag`. |
 
 ### Service-level cache methods
 
 | Method | Signature | Description |
 |--------|-----------|-------------|
-| `remember` | `(key, factory, ttl?) => Promise<T>` | Return cached value or call factory and cache the result. |
-| `rememberAsync` | `(key, factory, ttl?) => Promise<T>` | Async variant using cooperative yielding around direct-cache serialization. |
-| `set` | `(key, value, ttl?) => void` | Store an arbitrary value. |
-| `setAsync` | `(key, value, ttl?) => Promise<void>` | Async variant that yields before serializing and storing. |
+| `remember` | `(key, factory, ttlOrOptions?) => Promise<T>` | Return cached value or call factory and cache the result. Supports `staleWhileRevalidate`. |
+| `rememberAsync` | `(key, factory, ttlOrOptions?) => Promise<T>` | Async variant using cooperative yielding around direct-cache serialization. |
+| `set` | `(key, value, ttlOrOptions?) => void` | Store an arbitrary value. |
+| `setAsync` | `(key, value, ttlOrOptions?) => Promise<void>` | Async variant that yields before serializing and storing. |
 | `getValue` | `(key) => T \| undefined` | Retrieve a value stored via `set` or `remember`. |
 | `getValueAsync` | `(key) => Promise<T \| undefined>` | Async variant that yields before deserializing. |
+
+`ttlOrOptions` is either a TTL in milliseconds or an options object
+`{ ttl?, tags?, staleWhileRevalidate? }`.
 
 Concurrent `remember()` / `rememberAsync()` calls for the same key are
 coalesced: while one factory is in flight, later calls wait for the same
@@ -665,6 +698,8 @@ discarded instead of overwriting newer state.
 | `getAll` | `() => Record<string, CacheInfo>` | Returns all active entries. |
 | `getAllAsync` | `({ batchSize }?) => Promise<Record<string, CacheInfo>>` | Async batched variant of `getAll`. |
 | `delete` | `(key) => boolean` | Removes a single entry. |
+| `deleteByTag` | `(tag) => number` | Removes entries carrying a tag (or any of a list of tags). |
+| `deleteByTagAsync` | `(tag, { batchSize }?) => Promise<number>` | Async batched variant of `deleteByTag`. |
 | `deleteMatching` | `(pattern) => number` | Removes entries matching a glob pattern. |
 | `deleteMatchingAsync` | `(pattern, { batchSize }?) => Promise<number>` | Async batched variant of `deleteMatching`. |
 | `clear` | `() => void` | Removes all entries. |

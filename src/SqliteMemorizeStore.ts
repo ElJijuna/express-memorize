@@ -399,6 +399,52 @@ export class SqliteMemorizeStore implements MemorizeStoreLike {
     return count;
   }
 
+  deleteByTag(tag: string | string[]): number {
+    const tags = Array.isArray(tag) ? tag : [tag];
+    const rows = this._prepare('SELECT key, tags FROM cache_entries WHERE tags IS NOT NULL').all();
+
+    let count = 0;
+
+    for (const row of rows) {
+      const { key, tags: rawTags } = row as { key: string; tags: string };
+      const entryTags = JSON.parse(rawTags) as string[];
+
+      if (entryTags.some((entryTag) => tags.includes(entryTag))) {
+        this._evict(key, MemorizeEventType.Delete);
+        count++;
+      }
+    }
+
+    return count;
+  }
+
+  async deleteByTagAsync(tag: string | string[], options?: MemorizeBatchOptions): Promise<number> {
+    const tags = Array.isArray(tag) ? tag : [tag];
+    const batchSize = normalizeBatchSize(options);
+    const rows = this._prepare('SELECT key, tags FROM cache_entries WHERE tags IS NOT NULL').all();
+
+    let count = 0;
+    let scanned = 0;
+
+    for (const row of rows) {
+      const { key, tags: rawTags } = row as { key: string; tags: string };
+      const entryTags = JSON.parse(rawTags) as string[];
+
+      if (entryTags.some((entryTag) => tags.includes(entryTag)) && this._hasRow(key)) {
+        this._evict(key, MemorizeEventType.Delete);
+        count++;
+      }
+
+      scanned++;
+
+      if (scanned % batchSize === 0) {
+        await yieldToEventLoop();
+      }
+    }
+
+    return count;
+  }
+
   clear(): void {
     for (const key of this._keys()) {
       this._evict(key, MemorizeEventType.Delete);
@@ -748,6 +794,8 @@ export class SqliteMemorizeStore implements MemorizeStoreLike {
       expiresAt: entry.expiresAt,
       hits: entry.hits,
       size: entry.size,
+      staleAt: entry.staleAt ?? null,
+      tags: entry.tags,
       remainingTtl: entry.expiresAt ? Math.max(0, entry.expiresAt - Date.now()) : null,
     };
   }

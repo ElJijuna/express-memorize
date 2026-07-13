@@ -1,9 +1,10 @@
 import { createExpressMiddleware } from './adapters/express';
 import { createWorkerAsyncSerializer } from './asyncSerializer';
-import type { DeleteMatchingOptions, Memorize } from './domain/Memorize';
+import type { CacheEntry } from './domain/CacheEntry';
+import type { DeleteMatchingOptions, Memorize, MemorizeSetOptions } from './domain/Memorize';
 import type { MemorizeCallOptions } from './domain/MemorizeCallOptions';
 import type { MemorizeOptions, MemorizeStorageOptions } from './domain/MemorizeOptions';
-import { MemorizeStore } from './MemorizeStore';
+import { DEFAULT_TTL, MemorizeStore } from './MemorizeStore';
 import type { MemorizeStoreLike, MemorizeStoreOptions } from './MemorizeStoreLike';
 import {
   canUseNativeSqlite,
@@ -25,7 +26,13 @@ function resolvePattern(pattern: string | Array<unknown>): string {
 
 export type { Serializer, SerializerOption } from './serializer';
 
-export type { Memorize, MemorizeCallOptions, MemorizeOptions, MemorizeStorageOptions };
+export type {
+  Memorize,
+  MemorizeCallOptions,
+  MemorizeOptions,
+  MemorizeSetOptions,
+  MemorizeStorageOptions,
+};
 
 function normalizeAsyncSerializerThreshold(value: number | undefined): number {
   if (value === undefined) {
@@ -37,6 +44,24 @@ function normalizeAsyncSerializerThreshold(value: number | undefined): number {
   }
 
   return value;
+}
+
+function resolveSetOptions(ttlOrOptions?: number | MemorizeSetOptions): MemorizeSetOptions {
+  if (ttlOrOptions === undefined) {
+    return {};
+  }
+
+  if (typeof ttlOrOptions === 'number') {
+    return { ttl: ttlOrOptions };
+  }
+
+  const swr = ttlOrOptions.staleWhileRevalidate;
+
+  if (swr !== undefined && (!Number.isFinite(swr) || swr < 0)) {
+    throw new RangeError('staleWhileRevalidate must be greater than or equal to 0');
+  }
+
+  return ttlOrOptions;
 }
 
 function nextVersion(versions: Map<string, number>, key: string): number {
@@ -153,45 +178,136 @@ export function memorize(options: MemorizeOptions = {}): Memorize {
 
   cache.express = (callOptions?: MemorizeCallOptions) => expressMiddleware(callOptions);
 
-  cache.set = <T>(key: string, value: T, entryTtl?: number): void => {
-    nextVersion(keyVersions, key);
-    const body = serializer.serialize(value);
+  const resolveEntryTiming = (
+    options: MemorizeSetOptions,
+  ): { storeTtl: number | undefined; staleAt: number | null } => {
+    const baseTtl = options.ttl ?? ttl;
+    const swr = options.staleWhileRevalidate;
+
+    if (!swr) {
+      return { storeTtl: baseTtl, staleAt: null };
+    }
+
+    const effectiveTtl = baseTtl ?? DEFAULT_TTL;
+
+    if (effectiveTtl === Infinity) {
+      return { storeTtl: baseTtl, staleAt: null };
+    }
+
+    // The entry stays retrievable through the stale window; staleAt marks
+    // where fresh ends and stale-while-revalidate begins.
+    return { storeTtl: effectiveTtl + swr, staleAt: Date.now() + effectiveTtl };
+  };
+  const writeValue = (key: string, body: string | Buffer, options: MemorizeSetOptions): void => {
     const contentType = Buffer.isBuffer(body) ? 'application/octet-stream' : 'application/json';
+    const { storeTtl, staleAt } = resolveEntryTiming(options);
 
     store.set(
       key,
-      { body, statusCode: 200, contentType, size: serializedByteSize(body) },
-      entryTtl ?? ttl,
+      {
+        body,
+        statusCode: 200,
+        contentType,
+        size: serializedByteSize(body),
+        staleAt,
+        tags: options.tags,
+      },
+      storeTtl,
     );
   };
+  const tryDeserialize = <T>(entry: CacheEntry): T | undefined => {
+    try {
+      return serializer.deserialize(entry.body as string | Buffer) as T;
+    } catch {
+      return undefined;
+    }
+  };
+  const tryDeserializeAsync = async <T>(entry: CacheEntry): Promise<T | undefined> => {
+    if (!workerSerializer || entry.size < workerThresholdBytes) {
+      return tryDeserialize<T>(entry);
+    }
 
-  cache.setAsync = async <T>(key: string, value: T, entryTtl?: number): Promise<void> => {
+    try {
+      return (await workerSerializer.deserialize(entry.body as string | Buffer)) as T;
+    } catch {
+      return undefined;
+    }
+  };
+  const isStale = (entry: CacheEntry): boolean =>
+    entry.staleAt !== null && entry.staleAt !== undefined && Date.now() >= entry.staleAt;
+  const refreshInBackground = <T>(
+    key: string,
+    factory: () => T | Promise<T>,
+    options: MemorizeSetOptions,
+  ): void => {
+    if (inFlightRemember.has(key)) {
+      return;
+    }
+
+    const capturedVersion = keyVersions.get(key) ?? 0;
+    const capturedEpoch = mutationEpoch;
+    const promise = (async () => {
+      const value = await factory();
+
+      if ((keyVersions.get(key) ?? 0) === capturedVersion && mutationEpoch === capturedEpoch) {
+        nextVersion(keyVersions, key);
+        writeValue(key, serializer.serialize(value), options);
+      }
+
+      return value;
+    })();
+
+    inFlightRemember.set(key, promise);
+
+    void (async () => {
+      try {
+        await promise;
+      } catch (error) {
+        console.error(
+          `[express-memorize] stale-while-revalidate refresh for "${key}" failed`,
+          error,
+        );
+      } finally {
+        if (inFlightRemember.get(key) === promise) {
+          inFlightRemember.delete(key);
+        }
+      }
+    })();
+  };
+
+  cache.set = <T>(key: string, value: T, ttlOrOptions?: number | MemorizeSetOptions): void => {
+    const options = resolveSetOptions(ttlOrOptions);
+
+    nextVersion(keyVersions, key);
+    writeValue(key, serializer.serialize(value), options);
+  };
+
+  cache.setAsync = async <T>(
+    key: string,
+    value: T,
+    ttlOrOptions?: number | MemorizeSetOptions,
+  ): Promise<void> => {
+    const options = resolveSetOptions(ttlOrOptions);
     const version = nextVersion(keyVersions, key);
     const epoch = mutationEpoch;
 
     await yieldToEventLoop();
 
+    if (keyVersions.get(key) !== version || mutationEpoch !== epoch) {
+      return;
+    }
+
     if (
       !workerSerializer ||
       estimateByteSize(value, Number.POSITIVE_INFINITY) < workerThresholdBytes
     ) {
-      if (keyVersions.get(key) !== version || mutationEpoch !== epoch) {
-        return;
-      }
-
       const body = serializer.serialize(value);
 
       if (keyVersions.get(key) !== version || mutationEpoch !== epoch) {
         return;
       }
 
-      const contentType = Buffer.isBuffer(body) ? 'application/octet-stream' : 'application/json';
-
-      store.set(
-        key,
-        { body, statusCode: 200, contentType, size: serializedByteSize(body) },
-        entryTtl ?? ttl,
-      );
+      writeValue(key, body, options);
 
       return;
     }
@@ -202,13 +318,7 @@ export function memorize(options: MemorizeOptions = {}): Memorize {
       return;
     }
 
-    const contentType = Buffer.isBuffer(body) ? 'application/octet-stream' : 'application/json';
-
-    store.set(
-      key,
-      { body, statusCode: 200, contentType, size: serializedByteSize(body) },
-      entryTtl ?? ttl,
-    );
+    writeValue(key, body, options);
   };
 
   cache.getValue = <T>(key: string): T | undefined => {
@@ -218,19 +328,11 @@ export function memorize(options: MemorizeOptions = {}): Memorize {
       return undefined;
     }
 
-    try {
-      return serializer.deserialize(entry.body as string | Buffer) as T;
-    } catch {
-      return undefined;
-    }
+    return tryDeserialize<T>(entry);
   };
 
   cache.getValueAsync = async <T>(key: string): Promise<T | undefined> => {
     await yieldToEventLoop();
-
-    if (!workerSerializer) {
-      return cache.getValue<T>(key);
-    }
 
     const entry = store.getRaw(key);
 
@@ -238,30 +340,27 @@ export function memorize(options: MemorizeOptions = {}): Memorize {
       return undefined;
     }
 
-    if (entry.size < workerThresholdBytes) {
-      try {
-        return serializer.deserialize(entry.body as string | Buffer) as T;
-      } catch {
-        return undefined;
-      }
-    }
-
-    try {
-      return (await workerSerializer.deserialize(entry.body as string | Buffer)) as T;
-    } catch {
-      return undefined;
-    }
+    return tryDeserializeAsync<T>(entry);
   };
 
   cache.remember = async <T>(
     key: string,
     factory: () => T | Promise<T>,
-    rememberTtl?: number,
+    ttlOrOptions?: number | MemorizeSetOptions,
   ): Promise<T> => {
-    const existing = cache.getValue<T>(key);
+    const options = resolveSetOptions(ttlOrOptions);
+    const entry = store.getRaw(key);
 
-    if (existing !== undefined) {
-      return existing;
+    if (entry) {
+      const existing = tryDeserialize<T>(entry);
+
+      if (existing !== undefined) {
+        if (isStale(entry)) {
+          refreshInBackground(key, factory, options);
+        }
+
+        return existing;
+      }
     }
 
     const inFlight = inFlightRemember.get(key);
@@ -276,7 +375,8 @@ export function memorize(options: MemorizeOptions = {}): Memorize {
       const value = await factory();
 
       if ((keyVersions.get(key) ?? 0) === capturedVersion && mutationEpoch === capturedEpoch) {
-        cache.set(key, value, rememberTtl);
+        nextVersion(keyVersions, key);
+        writeValue(key, serializer.serialize(value), options);
       }
 
       return value;
@@ -296,12 +396,24 @@ export function memorize(options: MemorizeOptions = {}): Memorize {
   cache.rememberAsync = async <T>(
     key: string,
     factory: () => T | Promise<T>,
-    rememberTtl?: number,
+    ttlOrOptions?: number | MemorizeSetOptions,
   ): Promise<T> => {
-    const existing = await cache.getValueAsync<T>(key);
+    const options = resolveSetOptions(ttlOrOptions);
 
-    if (existing !== undefined) {
-      return existing;
+    await yieldToEventLoop();
+
+    const entry = store.getRaw(key);
+
+    if (entry) {
+      const existing = await tryDeserializeAsync<T>(entry);
+
+      if (existing !== undefined) {
+        if (isStale(entry)) {
+          refreshInBackground(key, factory, options);
+        }
+
+        return existing;
+      }
     }
 
     const inFlight = inFlightRemember.get(key);
@@ -313,7 +425,7 @@ export function memorize(options: MemorizeOptions = {}): Memorize {
     const promise = (async () => {
       const value = await factory();
 
-      await cache.setAsync(key, value, rememberTtl);
+      await cache.setAsync(key, value, options);
 
       return value;
     })();
@@ -337,6 +449,18 @@ export function memorize(options: MemorizeOptions = {}): Memorize {
     nextVersion(keyVersions, key);
 
     return store.delete(key);
+  };
+
+  cache.deleteByTag = (tag: string | string[]) => {
+    mutationEpoch++;
+
+    return store.deleteByTag(tag);
+  };
+
+  cache.deleteByTagAsync = async (tag, batchOptions) => {
+    mutationEpoch++;
+
+    return store.deleteByTagAsync(tag, batchOptions);
   };
 
   cache.deleteMatching = (pattern: string | Array<unknown>, options?: DeleteMatchingOptions) => {

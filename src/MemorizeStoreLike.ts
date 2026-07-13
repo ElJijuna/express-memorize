@@ -38,6 +38,8 @@ export interface MemorizeStoreLike {
   getAll(): Record<string, CacheInfo>;
   getAllAsync(options?: MemorizeBatchOptions): Promise<Record<string, CacheInfo>>;
   delete(key: string): boolean;
+  deleteByTag(tag: string | string[]): number;
+  deleteByTagAsync(tag: string | string[], options?: MemorizeBatchOptions): Promise<number>;
   deleteMatching(pattern: string): number;
   deleteMatchingAsync(pattern: string, options?: MemorizeBatchOptions): Promise<number>;
   clear(): void;
