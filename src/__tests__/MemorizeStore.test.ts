@@ -496,6 +496,40 @@ describe('MemorizeStore', () => {
       expect(resetResult?.body).toBe('v2');
     });
 
+    it('re-setting a key with a later TTL survives the original deadline', () => {
+      store.set('/users', entry('v1'), 1000);
+      store.set('/users', entry('v2'), 5000);
+      jest.advanceTimersByTime(1001);
+
+      expect(store.get('/users')?.body).toBe('v2');
+
+      jest.advanceTimersByTime(4000);
+      expect(store.get('/users')).toBeNull();
+    });
+
+    it('evicts every entry sharing the same deadline in one timer pass', () => {
+      const expired = jest.fn();
+
+      store.on(MemorizeEventType.Expire, expired);
+      store.set('/a', entry(), 1000);
+      store.set('/b', entry(), 1000);
+      store.set('/c', entry(), 1000);
+      jest.advanceTimersByTime(1001);
+
+      expect(expired).toHaveBeenCalledTimes(3);
+      expect(store.size()).toBe(0);
+    });
+
+    it('still expires the next entry after the scheduled one is deleted', () => {
+      store.set('/first', entry(), 1000);
+      store.set('/second', entry(), 2000);
+      store.delete('/first');
+      jest.advanceTimersByTime(2001);
+
+      expect(store.get('/second')).toBeNull();
+      expect(store.size()).toBe(0);
+    });
+
     it('entries without TTL use the default finite TTL', () => {
       store.set('/users', entry());
       jest.advanceTimersByTime(59_999);

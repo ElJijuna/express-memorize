@@ -13,6 +13,7 @@ import type { MemorizeStats } from './domain/MemorizeStats';
 import type { MemorizeStoreLike, MemorizeStoreOptions, StoreEntryInput } from './MemorizeStoreLike';
 import { estimateByteSize } from './utils/byteSize';
 import { yieldToEventLoop } from './utils/eventLoop';
+import { ExpiryHeap, type ExpiryHeapNode } from './utils/expiryHeap';
 import { globToRegex } from './utils/globToRegex';
 
 export type {
@@ -91,6 +92,7 @@ export function normalizeByteLimit(name: string, value: number | undefined): num
  */
 export class MemorizeStore implements MemorizeStoreLike {
   private _store = new Map<string, CacheEntry>();
+  private _expiryHeap = new ExpiryHeap();
   private _expiryTimer: ReturnType<typeof timerSetTimeout> | null = null;
   private _nextExpiryAt: number | null = null;
   private _nextExpiryKey: string | null = null;
@@ -186,6 +188,16 @@ export class MemorizeStore implements MemorizeStoreLike {
 
     this._store.set(key, stored);
     this._totalByteSize += size;
+
+    if (expiresAt !== null) {
+      this._expiryHeap.push(key, expiresAt);
+
+      // Stale nodes from overwritten or deleted entries accumulate until popped;
+      // rebuild once they outnumber live entries to bound heap memory.
+      if (this._expiryHeap.length > this._store.size * 2 + 16) {
+        this._rebuildExpiryHeap();
+      }
+    }
 
     this._emit(MemorizeEventType.Set, {
       type: MemorizeEventType.Set,
@@ -517,6 +529,7 @@ export class MemorizeStore implements MemorizeStoreLike {
     this._emit(reason, { type: reason, key });
 
     if (removed && this._store.size === 0) {
+      this._expiryHeap.clear();
       this._emit(MemorizeEventType.Empty, { type: MemorizeEventType.Empty });
     }
 
@@ -586,40 +599,52 @@ export class MemorizeStore implements MemorizeStoreLike {
     this._expiryTimer = null;
   }
 
-  private _findNextExpiry(): { key: string; expiresAt: number } | null {
-    let nextKey: string | null = null;
-    let nextExpiryAt: number | null = null;
+  private _findNextExpiry(): ExpiryHeapNode | null {
+    for (;;) {
+      const top = this._expiryHeap.peek();
 
-    for (const [key, entry] of this._store) {
-      if (entry.expiresAt === null) {
-        continue;
+      if (!top) {
+        return null;
       }
 
-      if (nextExpiryAt === null || entry.expiresAt < nextExpiryAt) {
-        nextKey = key;
-        nextExpiryAt = entry.expiresAt;
+      if (this._store.get(top.key)?.expiresAt === top.expiresAt) {
+        return top;
+      }
+
+      this._expiryHeap.pop();
+    }
+  }
+
+  private _rebuildExpiryHeap(): void {
+    const nodes: ExpiryHeapNode[] = [];
+
+    for (const [key, entry] of this._store) {
+      if (entry.expiresAt !== null) {
+        nodes.push({ key, expiresAt: entry.expiresAt });
       }
     }
 
-    return nextKey === null || nextExpiryAt === null
-      ? null
-      : { key: nextKey, expiresAt: nextExpiryAt };
+    this._expiryHeap.rebuild(nodes);
   }
 
   private _evictExpiredEntries(): void {
     const now = Date.now();
 
-    let expired = false;
+    for (;;) {
+      const top = this._expiryHeap.peek();
 
-    for (const [key, entry] of [...this._store]) {
-      if (entry.expiresAt !== null && now >= entry.expiresAt) {
-        expired = this._evictExpiredEntry(key) || expired;
+      if (!top || top.expiresAt > now) {
+        break;
+      }
+
+      this._expiryHeap.pop();
+
+      if (this._store.get(top.key)?.expiresAt === top.expiresAt) {
+        this._evictExpiredEntry(top.key);
       }
     }
 
-    if (expired) {
-      this._scheduleNextExpiry();
-    }
+    this._scheduleNextExpiry();
   }
 
   private _evictExpiredEntry(key: string): boolean {
@@ -632,6 +657,7 @@ export class MemorizeStore implements MemorizeStoreLike {
     this._emit(MemorizeEventType.Expire, { type: MemorizeEventType.Expire, key });
 
     if (this._store.size === 0) {
+      this._expiryHeap.clear();
       this._emit(MemorizeEventType.Empty, { type: MemorizeEventType.Empty });
     }
 
