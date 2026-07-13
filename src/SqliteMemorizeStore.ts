@@ -173,7 +173,9 @@ export class SqliteMemorizeStore implements MemorizeStoreLike {
         expires_at INTEGER NULL,
         hits INTEGER NOT NULL,
         size INTEGER NOT NULL,
-        last_accessed INTEGER NOT NULL
+        last_accessed INTEGER NOT NULL,
+        stale_at INTEGER NULL,
+        tags TEXT NULL
       );
       CREATE INDEX IF NOT EXISTS idx_cache_entries_expires_at ON cache_entries(expires_at);
       CREATE INDEX IF NOT EXISTS idx_cache_entries_last_accessed ON cache_entries(last_accessed);
@@ -181,6 +183,17 @@ export class SqliteMemorizeStore implements MemorizeStoreLike {
     this._migrate();
     this._accessCounter = Math.max(Date.now(), this._maxLastAccessed());
     this._scheduleNextExpiry();
+  }
+
+  /** Adds columns introduced after the first release to databases created by older versions. */
+  private _migrate(): void {
+    for (const column of ['stale_at INTEGER NULL', 'tags TEXT NULL']) {
+      try {
+        this._db.exec(`ALTER TABLE cache_entries ADD COLUMN ${column}`);
+      } catch {
+        // Column already exists.
+      }
+    }
   }
 
   on(event: MemorizeEventType.Set, handler: (e: MemorizeSetEvent) => void): () => void;
@@ -245,8 +258,8 @@ export class SqliteMemorizeStore implements MemorizeStoreLike {
     this._prepare(
       `
         INSERT OR REPLACE INTO cache_entries
-          (key, body, body_encoding, status_code, content_type, expires_at, hits, size, last_accessed)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          (key, body, body_encoding, status_code, content_type, expires_at, hits, size, last_accessed, stale_at, tags)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
     ).run(
       key,
@@ -258,6 +271,8 @@ export class SqliteMemorizeStore implements MemorizeStoreLike {
       1,
       size,
       this._nextAccessed(),
+      entry.staleAt ?? null,
+      entry.tags && entry.tags.length > 0 ? JSON.stringify(entry.tags) : null,
     );
 
     this._emit(MemorizeEventType.Set, {
@@ -515,6 +530,8 @@ export class SqliteMemorizeStore implements MemorizeStoreLike {
       expiresAt: row.expires_at,
       hits: row.hits,
       size: row.size,
+      staleAt: row.stale_at ?? null,
+      tags: row.tags ? (JSON.parse(row.tags) as string[]) : undefined,
     };
   }
 
