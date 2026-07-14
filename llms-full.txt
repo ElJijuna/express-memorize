@@ -1,0 +1,525 @@
+# express-memorize — full documentation
+
+> Zero-dependency, fully-typed in-memory HTTP cache for Node.js. One package with sub-path adapters for Express, Fastify, Koa, Hono, NestJS, and the Fetch API, plus a service-level cache (`set` / `getValue` / `remember`) — all sharing the same store.
+
+## Features
+
+- Caches `GET` responses automatically when status code is `2xx`
+- Works with Express, Fastify, Koa, NestJS, Hono, Fetch API / serverless, and direct service-level usage
+- Per-route TTL override and `noCache` bypass
+- `maxEntries` cap with LRU eviction to bound memory usage
+- Size metrics: `size()`, `byteSize()`, `getStats()`
+- Service-level cache: `remember()`, `set()`, `getValue()` and their `*Async` variants
+- Stale-while-revalidate: serve stale values instantly while refreshing in the background
+- Tag-based invalidation: `deleteByTag` / `deleteByTagAsync`
+- Pluggable serializer: `'auto'` (node:v8 when available, else JSON), `'json'`, `'v8'`, or custom
+- Event hooks: `set`, `delete`, `expire`, `evict`, `empty`, with `off()` / unsubscribe and `dispose()`
+- Cache inspection and invalidation API (`get`, `getAll`, `delete`, `deleteMatching`, `clear`)
+- Hit counter per cache entry and hit/miss statistics
+- `X-Cache: HIT | MISS | BYPASS` response header
+- Zero required runtime dependencies, fully typed
+- Optional persistent SQLite storage via Node.js `node:sqlite` (Node.js >= 24)
+
+## Installation
+
+```bash
+npm install express-memorize
+```
+
+Adapters for non-Express runtimes are optional — install only what you need:
+
+```bash
+npm install fastify                             # Fastify adapter
+npm install koa @koa/router                     # Koa adapter
+npm install hono                                # Hono adapter
+npm install @nestjs/common @nestjs/core rxjs    # NestJS adapter
+```
+
+SQLite storage uses Node.js `node:sqlite`, so no driver package is required. Use Node.js 24 or newer for SQLite storage. Older Node.js runtimes automatically fall back to memory storage and emit a warning.
+
+## Quick start
+
+### Express
+
+```typescript
+import express from 'express';
+import { memorize } from 'express-memorize';
+
+const app = express();
+const cache = memorize({ ttl: 30_000 });
+
+app.get('/users', cache(), async (req, res) => {
+  const users = await db.getUsers();
+  res.json({ data: users });
+});
+
+app.listen(3000);
+```
+
+### Fastify
+
+```typescript
+import Fastify from 'fastify';
+import { memorize } from 'express-memorize';
+import { createFastifyPlugin } from 'express-memorize/fastify';
+
+const app = Fastify();
+const cache = memorize({ ttl: 30_000 });
+
+await app.register(createFastifyPlugin(cache));
+
+app.get('/users', async () => {
+  return usersService.findAll();
+});
+```
+
+Route-level usage:
+
+```typescript
+import { createFastifyPreHandler } from 'express-memorize/fastify';
+
+app.get(
+  '/users',
+  { preHandler: createFastifyPreHandler(cache, { ttl: 10_000 }) },
+  async () => usersService.findAll(),
+);
+```
+
+### Koa
+
+```typescript
+import Koa from 'koa';
+import Router from '@koa/router';
+import { memorize } from 'express-memorize';
+import { createKoaMiddleware } from 'express-memorize/koa';
+
+const app = new Koa();
+const router = new Router();
+const cache = memorize({ ttl: 30_000 });
+
+router.get('/users', createKoaMiddleware(cache), async (ctx) => {
+  ctx.body = await usersService.findAll();
+});
+
+app.use(router.routes());
+app.use(router.allowedMethods());
+```
+
+### Hono
+
+```typescript
+import { Hono } from 'hono';
+import { memorize } from 'express-memorize';
+import { createHonoMiddleware } from 'express-memorize/hono';
+
+const app = new Hono();
+const cache = memorize({ ttl: 30_000 });
+
+app.get('/users', createHonoMiddleware(cache), async (c) => {
+  return c.json(await usersService.findAll());
+});
+```
+
+### NestJS
+
+```typescript
+import { Module } from '@nestjs/common';
+import { APP_INTERCEPTOR } from '@nestjs/core';
+import {
+  MemorizeCacheKey,
+  MemorizeInterceptor,
+  MemorizeModule,
+  MemorizeNoCache,
+  MemorizeTags,
+  MemorizeTtl,
+} from 'express-memorize/nestjs';
+
+@Module({
+  imports: [MemorizeModule.forRoot({ ttl: 30_000 })],
+  providers: [{ provide: APP_INTERCEPTOR, useExisting: MemorizeInterceptor }],
+})
+export class AppModule {}
+
+export class UsersController {
+  @MemorizeCacheKey('users:list')
+  @MemorizeTtl(10_000)
+  @MemorizeTags('users')
+  findAll() {
+    return usersService.findAll();
+  }
+
+  @MemorizeNoCache()
+  live() {
+    return usersService.live();
+  }
+}
+```
+
+For global usage, import `MemorizeModule.forRoot()` and register `APP_INTERCEPTOR` with `useExisting: MemorizeInterceptor` so the interceptor receives the module's shared cache instance.
+
+### Fetch API / serverless
+
+```typescript
+import { memorize } from 'express-memorize';
+import { cacheFetchHandler } from 'express-memorize/fetch';
+
+const cache = memorize({ ttl: 30_000 });
+
+export default cacheFetchHandler(cache, async (request) => {
+  const users = await usersService.findAll();
+  return Response.json(users);
+});
+```
+
+Works in any runtime that supports the Web-standard `Request` / `Response` APIs: Node.js, Bun, Deno, Cloudflare Workers, and similar environments.
+
+### Service-level caching
+
+Cache arbitrary values directly — no HTTP layer required.
+
+```typescript
+const cache = memorize({ ttl: 60_000 });
+
+// Compute-and-cache pattern
+const users = await cache.remember('users:list', () => usersService.findAll());
+
+// Per-call TTL
+const user = await cache.remember(`users:${id}`, () => usersService.findById(id), 10_000);
+
+// Concurrent calls for the same key share one in-flight factory
+const [a, b] = await Promise.all([
+  cache.remember('users:featured', () => usersService.findFeatured()),
+  cache.remember('users:featured', () => usersService.findFeatured()),
+]);
+
+// Async direct-cache variant: yields around serialization/deserialization
+const stats = await cache.rememberAsync('reports:daily-stats', () => reportsService.dailyStats(), 30_000);
+
+// Explicit set/get
+cache.set('config', appConfig);
+const config = cache.getValue<AppConfig>('config');
+```
+
+## Stale-while-revalidate
+
+`remember` / `rememberAsync` accept an options object with a `staleWhileRevalidate` window. After `ttl` elapses the entry becomes stale but is still returned instantly for up to `staleWhileRevalidate` ms while the factory re-runs in the background (concurrent stale reads trigger a single refresh). After the window closes the entry is evicted and the next read is a regular miss.
+
+```typescript
+const users = await cache.remember('users:list', () => userService.findAll(), {
+  ttl: 30_000,                  // fresh for 30s
+  staleWhileRevalidate: 60_000, // then stale-but-served for up to 60s more
+});
+```
+
+`set` / `setAsync` accept the same options; a value written with `staleWhileRevalidate` stays readable through the stale window, and `CacheInfo.staleAt` tells you when it went stale. If a background refresh fails, the stale value keeps being served until the window closes and the error is logged.
+
+## Tag-based invalidation
+
+Attach `tags` when writing and invalidate whole groups at once — often more ergonomic than glob patterns:
+
+```typescript
+cache.set('users:1', alice, { tags: ['users'] });
+cache.set('users:2', bob,   { tags: ['users', 'admins'] });
+
+// Middleware entries can be tagged too:
+app.get('/users', cache({ tags: ['users'] }), handler);
+
+cache.deleteByTag('users');            // → removes all three
+cache.deleteByTag(['users', 'posts']); // multiple tags
+await cache.deleteByTagAsync('users', { batchSize: 500 }); // batched variant
+```
+
+Every adapter accepts the same `tags` option (Fastify, Koa, Hono, Fetch); in NestJS use the `@MemorizeTags('users')` decorator on a controller or handler.
+
+## Serializer
+
+The `serializer` option controls how values passed to `set()` / `getValue()` / `remember()` are stored internally. It does not affect HTTP middleware caching — adapters store response bodies as-is.
+
+| Value | Serializes to | Handles Date, Map, Set, Buffer | Runtime |
+|-------|--------------|--------------------------------|---------|
+| `'auto'` (default) | Buffer (v8) or string (JSON) | Yes — when `node:v8` is available | Any |
+| `'json'` | string | No | Any (edge runtimes, human-readable) |
+| `'v8'` | Buffer | Yes | Node.js / Bun — throws at construction otherwise |
+| Custom object | user-defined | user-defined | Any |
+
+```typescript
+const cache = memorize();                          // auto (default)
+const cache = memorize({ serializer: 'json' });    // always JSON
+const cache = memorize({ serializer: 'v8' });      // always v8
+
+// Custom serializer — bring your own (MessagePack, CBOR, etc.)
+import { pack, unpack } from 'msgpackr';
+const cache = memorize({
+  serializer: {
+    serialize:   (v) => Buffer.from(pack(v)),
+    deserialize: (d) => unpack(d as Buffer),
+  },
+});
+```
+
+With `'v8'` or `'auto'`, `set()` correctly round-trips types that JSON cannot represent (`Date`, `Map`, `Set`, `Buffer`).
+
+## Middleware usage patterns (Express)
+
+```typescript
+const cache = memorize({ ttl: 60_000 });
+
+app.use(cache());                                        // global: all GET routes
+app.get('/products', cache({ ttl: 10_000 }), handler);   // per-route TTL
+app.get('/config',   cache({ ttl: Infinity }), handler); // no expiry
+app.get('/live',     cache({ noCache: true }), handler); // bypass, X-Cache: BYPASS
+app.get('/users',    cache({ key: (req) => req.path }), handler); // custom key
+app.use(cache({ shouldCache: (req) => !req.headers.authorization })); // conditional
+```
+
+Caution: the cache key is the URL, so authenticated or personalized responses stored in a shared cache would be served to every caller of that URL. Use `shouldCache` (or per-route mounting) to exclude them.
+
+## Cache invalidation
+
+```typescript
+cache.delete('/users');                          // single key
+cache.deleteMatching('**/users/*');              // glob pattern
+await cache.deleteMatchingAsync('**/users/*', { batchSize: 500 }); // batched
+cache.deleteByTag('users');                      // by tag
+cache.clear();                                   // everything
+await cache.clearAsync({ batchSize: 500 });      // batched clear
+```
+
+Glob rules:
+
+| Pattern | Behaviour |
+|---------|-----------|
+| `*` | Matches any sequence within a single path segment (does not cross `/`) |
+| `**` | Matches any sequence across path segments (crosses `/`) |
+| `?` | Matches any single character except `/` |
+
+## Bounding memory
+
+When `maxEntries` or `maxTotalBytes` is reached, the least-recently-used (LRU) entry is evicted before the new one is stored. Entries larger than `maxValueBytes` are skipped by default.
+
+```typescript
+const cache = memorize({
+  ttl: 30_000,
+  maxEntries: 1_000,
+  maxValueBytes: 256_000,
+  maxTotalBytes: 50_000_000,
+});
+```
+
+## Size metrics
+
+```typescript
+cache.size();      // number of active entries
+cache.byteSize();  // approximate total body size in bytes
+cache.getStats();  // { entries, maxEntries, maxValueBytes, maxTotalBytes, byteSize,
+                   //   hits, misses, hitRatio }
+```
+
+`byteSize()` is an estimate based on UTF-8 encoding for strings and `byteLength` for buffers. `hits` / `misses` count value lookups (middleware reads, `getValue`, `remember`) since the instance was created; `hitRatio` is `hits / (hits + misses)`, or `null` before the first lookup.
+
+## SQLite storage
+
+```typescript
+const cache = memorize({
+  ttl: 60_000,
+  storage: { type: 'sqlite', directory: 'database' },
+});
+```
+
+The SQLite backend creates `express-memorize.sqlite` inside the configured directory (default `database`). Cached entries persist across process restarts until their TTL expires or they are invalidated. Requires Node.js 24 or newer; older runtimes log a warning and fall back to the in-memory store.
+
+## Inspect the cache
+
+```typescript
+cache.get('/users');   // CacheInfo | null
+cache.getAll();        // Record<string, CacheInfo>
+cache.getAllAsync();   // Promise<Record<string, CacheInfo>>
+```
+
+`CacheInfo` shape:
+
+```typescript
+{
+  key: string;
+  body: unknown;
+  statusCode: number;
+  contentType: string;
+  expiresAt: number | null;
+  remainingTtl: number | null; // ms until expiry, null when ttl is Infinity
+  hits: number;                // times this key was served from cache
+  size: number;                // approximate body size in bytes
+  staleAt?: number | null;     // when the entry went stale (staleWhileRevalidate)
+  tags?: string[];             // invalidation tags, see deleteByTag
+}
+```
+
+`hits` starts at `1` on the initial cache miss and increments on every hit. It resets to `1` if the entry is evicted and re-cached.
+
+## Event hooks
+
+```typescript
+import { MemorizeEventType } from 'express-memorize';
+
+cache.on(MemorizeEventType.Set,    (e) => console.log('stored',  e.key));
+cache.on(MemorizeEventType.Delete, (e) => console.log('deleted', e.key));
+cache.on(MemorizeEventType.Expire, (e) => console.log('expired', e.key));
+cache.on(MemorizeEventType.Evict,  (e) => console.log('evicted', e.key));
+cache.on(MemorizeEventType.Empty,  ()  => console.log('cache is empty'));
+
+// on() returns an unsubscribe function; off() removes a listener by reference
+const unsubscribe = cache.on(MemorizeEventType.Set, handler);
+unsubscribe();
+cache.off(MemorizeEventType.Set, handler);
+```
+
+## Disposing an instance
+
+```typescript
+// Cancels the expiry timer, removes all listeners, terminates worker threads,
+// and closes the SQLite handle (persisted entries stay on disk).
+cache.dispose();
+```
+
+## API reference
+
+### memorize(options?)
+
+Creates a cache instance. Returns a `Memorize` object.
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `storage` | `{ type: 'memory' } \| { type: 'sqlite'; directory?: string }` | `{ type: 'memory' }` | Storage backend. SQLite uses Node.js `node:sqlite` and falls back to memory with a warning on Node.js below 24. |
+| `ttl` | `number` | `60_000` | Time-to-live in milliseconds. Pass `Infinity` for no expiry. |
+| `maxEntries` | `number` | `undefined` | Maximum number of entries. LRU eviction when reached. |
+| `maxValueBytes` | `number` | `undefined` | Maximum serialized byte size for one entry. Oversized entries are skipped by default. |
+| `maxTotalBytes` | `number` | `undefined` | Maximum approximate byte size for the whole cache. LRU eviction when reached. |
+| `sizeLimitAction` | `'skip' \| 'throw'` | `'skip'` | Behavior when one entry exceeds a byte limit. |
+| `asyncSerializer` | `'yield' \| 'worker'` | `'yield'` | Backend for `setAsync` / `getValueAsync` / `rememberAsync`. `'worker'` offloads built-in serializers to `worker_threads`. |
+| `asyncSerializerWorkers` | `'auto' \| number` | `'auto'` | Maximum lazy worker count for `asyncSerializer: 'worker'`. |
+| `asyncSerializerThresholdBytes` | `number` | `64_000` | Minimum estimated serialized size before async direct-cache APIs offload work to a worker. |
+| `serializer` | `'auto' \| 'json' \| 'v8' \| Serializer` | `'auto'` | Serializer for `set()` / `getValue()`. Does not affect HTTP middleware caching. |
+
+### cache(options?) / cache.express(options?)
+
+Returns an Express `RequestHandler`. `cache()` is a backwards-compatible alias for `cache.express()`.
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `ttl` | `number` | global `ttl` | TTL override for this route. Pass `Infinity` for no expiry. |
+| `noCache` | `boolean` | `false` | Skip cache entirely. Sets `X-Cache: BYPASS`. |
+| `key` | `(req) => string` | `req.originalUrl` | Custom cache key extractor. |
+| `shouldCache` | `(req, res) => boolean` | — | Return `false` to bypass the cache for that request (sets `X-Cache: BYPASS`). |
+| `tags` | `string[]` | — | Invalidation tags attached to every entry cached by this middleware. See `deleteByTag`. |
+
+The Fastify, Koa, Hono, and Fetch adapters accept the same `ttl` / `noCache` / `key` / `tags` options (with framework-specific `key` signatures).
+
+### Service-level cache methods
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `remember` | `(key, factory, ttlOrOptions?) => Promise<T>` | Return cached value or call factory and cache the result. Supports `staleWhileRevalidate`. |
+| `rememberAsync` | `(key, factory, ttlOrOptions?) => Promise<T>` | Async variant using cooperative yielding around serialization. |
+| `set` | `(key, value, ttlOrOptions?) => void` | Store an arbitrary value. |
+| `setAsync` | `(key, value, ttlOrOptions?) => Promise<void>` | Async variant that yields before serializing and storing. |
+| `getValue` | `(key) => T \| undefined` | Retrieve a value stored via `set` or `remember`. |
+| `getValueAsync` | `(key) => Promise<T \| undefined>` | Async variant that yields before deserializing. |
+
+`ttlOrOptions` is either a TTL in milliseconds or an options object `{ ttl?, tags?, staleWhileRevalidate? }`.
+
+Concurrent `remember()` / `rememberAsync()` calls for the same key are coalesced: while one factory is in flight, later calls wait for the same promise instead of running the factory again.
+
+`setAsync()` guards against stale async writes: if another write or broad invalidation (`clear`, `clearAsync`, `deleteMatching`, `deleteMatchingAsync`) touches the cache before serialization finishes, the older async write is discarded instead of overwriting newer state.
+
+### Cache management
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `get` | `(key) => CacheInfo \| null` | Returns info for a cached key. |
+| `getAll` | `() => Record<string, CacheInfo>` | Returns all active entries. |
+| `getAllAsync` | `({ batchSize }?) => Promise<Record<string, CacheInfo>>` | Async batched variant of `getAll`. |
+| `delete` | `(key) => boolean` | Removes a single entry. |
+| `deleteByTag` | `(tag) => number` | Removes entries carrying a tag (or any of a list of tags). |
+| `deleteByTagAsync` | `(tag, { batchSize }?) => Promise<number>` | Async batched variant of `deleteByTag`. |
+| `deleteMatching` | `(pattern) => number` | Removes entries matching a glob pattern. |
+| `deleteMatchingAsync` | `(pattern, { batchSize }?) => Promise<number>` | Async batched variant of `deleteMatching`. |
+| `clear` | `() => void` | Removes all entries. |
+| `clearAsync` | `({ batchSize }?) => Promise<number>` | Async batched variant of `clear`. |
+| `on` | `(event, handler) => () => void` | Registers an event listener; returns an unsubscribe function. |
+| `off` | `(event, handler) => void` | Removes a listener registered with `on`. |
+| `dispose` | `() => void` | Releases timers, listeners, worker threads, and the SQLite handle. |
+| `size` | `() => number` | Number of active entries. |
+| `byteSize` | `() => number` | Approximate total body size in bytes. |
+| `getStats` | `() => MemorizeStats` | `{ entries, maxEntries, maxValueBytes, maxTotalBytes, byteSize, hits, misses, hitRatio }`. |
+
+### Adapters
+
+| Import path | Export | Framework |
+|-------------|--------|-----------|
+| `express-memorize` | `memorize` | Core factory |
+| `express-memorize/express` | `createExpressAdapter(cache, options?)` | Express |
+| `express-memorize/fastify` | `createFastifyPlugin(cache, options?)`, `createFastifyPreHandler(cache, options?)` | Fastify |
+| `express-memorize/koa` | `createKoaMiddleware(cache, options?)` | Koa |
+| `express-memorize/nestjs` | `MemorizeModule`, `MemorizeInterceptor`, `MemorizeCacheKey`, `MemorizeTtl`, `MemorizeNoCache`, `MemorizeTags` | NestJS |
+| `express-memorize/hono` | `createHonoMiddleware(cache, options?)` | Hono |
+| `express-memorize/fetch` | `cacheFetchHandler(cache, handler, options?)` | Fetch API / Serverless |
+
+### Events
+
+| Event | Payload | When |
+|-------|---------|------|
+| `set` | `{ type, key, body, statusCode, contentType, expiresAt, size }` | A response is stored |
+| `delete` | `{ type, key }` | Manual removal via `delete`, `deleteByTag`, `deleteMatching`, or `clear` |
+| `expire` | `{ type, key }` | TTL timer fires or lazy expiry is detected |
+| `evict` | `{ type, key }` | LRU eviction due to `maxEntries` or `maxTotalBytes` limit |
+| `empty` | `{ type }` | Last entry removed, cache is now empty |
+
+### Response headers
+
+| Header | Value | Description |
+|--------|-------|-------------|
+| `X-Cache` | `HIT` | Response served from cache |
+| `X-Cache` | `MISS` | Response computed and stored |
+| `X-Cache` | `BYPASS` | Cache skipped — `noCache: true` or `shouldCache` returned `false` |
+
+## GraphQL caching
+
+GraphQL is not a simple route-level caching problem. The recommended strategy is service-level caching with `remember()` inside resolvers or the services they call.
+
+```typescript
+const cache = memorize({ ttl: 30_000 });
+
+const resolvers = {
+  Query: {
+    user: (_parent, args, context) => {
+      const viewerScope = context.user ? `user:${context.user.id}` : 'anonymous';
+      return cache.remember(
+        `graphql:${viewerScope}:user:${args.id}`,
+        () => usersService.findVisibleById(args.id, context.user),
+      );
+    },
+  },
+  Mutation: {
+    updateUser: async (_parent, args) => {
+      const user = await usersService.update(args.id, args.input);
+      cache.deleteMatching(`graphql:*:user:${args.id}`);
+      return user;
+    },
+  },
+};
+```
+
+Cache key rules: include every input that can change the result (operation name, variables, locale, authorization scope); never share cached data across users unless genuinely public; keep mutation invalidation explicit with `delete()` / `deleteMatching()` / `deleteByTag()`; avoid caching responses that contain GraphQL errors.
+
+## Behavior notes
+
+- Only `GET` requests are cached. All other methods bypass the cache entirely.
+- Only responses with a `2xx` status code are stored.
+- All middleware and adapter instances created from the same `memorize()` call share the same store.
+- Two separate `memorize()` calls produce independent stores.
+- SQLite-backed stores persist entries between process restarts when they use the same directory.
+- Byte size is an approximation — strings use UTF-8 encoding, objects use `JSON.stringify` length.
+- Async batched inspection/invalidation methods are eventually consistent, not transactional snapshots; other cache operations may interleave between batches.
+
+## License
+
+MIT

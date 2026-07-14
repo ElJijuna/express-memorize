@@ -1,0 +1,24 @@
+# express-memorize
+
+> Zero-dependency, fully-typed in-memory HTTP cache for Node.js. One package with sub-path adapters for Express, Fastify, Koa, Hono, NestJS, and the Fetch API, plus a service-level cache (`set` / `getValue` / `remember`) — all sharing the same store.
+
+Key facts:
+
+- Install: `npm install express-memorize`
+- Main entry: `memorize(options)` returns a `Memorize` instance that is both callable as Express middleware (`app.get('/users', cache(), handler)` or `app.use(cache())`) and a direct cache API.
+- The HTTP middleware caches only `GET` responses with a `2xx` status code. The cache key defaults to `req.originalUrl` (includes the query string) and can be customized per route with `key: (req) => string`.
+- Features: per-entry TTL, LRU eviction with `maxEntries` / `maxValueBytes` / `maxTotalBytes`, stale-while-revalidate, tag-based invalidation (`deleteByTag`), glob-pattern invalidation (`deleteMatching`), hit/miss statistics (`getStats`), typed events (Set / Delete / Expire / Evict / Empty) with unsubscribe, `dispose()` for graceful shutdown, optional persistent SQLite storage (Node.js >= 24), and worker-thread serialization for large payloads.
+- Sub-path exports: `express-memorize/express`, `express-memorize/fastify`, `express-memorize/koa`, `express-memorize/hono`, `express-memorize/nestjs`, `express-memorize/fetch`.
+- Service-level API: `cache.remember(key, factory, { ttl, tags, staleWhileRevalidate })` returns the cached value or runs the factory once (concurrent calls are coalesced) and supports serving stale values while refreshing in the background.
+- Caution: the middleware cache key is the URL, so exclude authenticated/personalized responses with `shouldCache: (req) => boolean` or per-route mounting.
+
+## Docs
+
+- [README](https://raw.githubusercontent.com/ElJijuna/express-memorize/main/README.md): full usage guide and API reference
+- [CHANGELOG](https://raw.githubusercontent.com/ElJijuna/express-memorize/main/CHANGELOG.md): release history
+- [Benchmarks](https://raw.githubusercontent.com/ElJijuna/express-memorize/main/BENCH.md): performance notes and methodology
+- [API docs](https://eljijuna.github.io/express-memorize/): generated TypeDoc reference
+
+## Optional
+
+- [llms-full.txt](https://raw.githubusercontent.com/ElJijuna/express-memorize/main/llms-full.txt): the complete API documentation in a single file

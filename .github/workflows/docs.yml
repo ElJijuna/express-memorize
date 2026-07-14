@@ -33,6 +33,9 @@ jobs:
       - name: Generate docs
         run: npm run docs
 
+      - name: Copy llms.txt files to site root
+        run: cp llms.txt llms-full.txt docs-site/
+
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:

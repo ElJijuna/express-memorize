@@ -45,7 +45,9 @@
   },
   "files": [
     "dist",
-    "CHANGELOG.md"
+    "CHANGELOG.md",
+    "llms.txt",
+    "llms-full.txt"
   ],
   "scripts": {
     "build": "tsc",
