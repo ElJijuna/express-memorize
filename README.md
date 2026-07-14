@@ -396,6 +396,8 @@ cache.deleteByTag(['users', 'posts']); // multiple tags
 await cache.deleteByTagAsync('users', { batchSize: 500 }); // batched variant
 ```
 
+Every adapter accepts the same `tags` option (Fastify, Koa, Hono, Fetch); in NestJS use the `@MemorizeTags('users')` decorator on a controller or handler.
+
 ### Fastify route-level usage
 
 ```typescript
@@ -465,6 +467,7 @@ import {
   MemorizeCacheKey,
   MemorizeInterceptor,
   MemorizeNoCache,
+  MemorizeTags,
   MemorizeTtl,
 } from 'express-memorize/nestjs';
 
@@ -474,6 +477,7 @@ import {
 export class UsersController {
   @Get()
   @MemorizeCacheKey('users:list')
+  @MemorizeTags('users')
   findAll() {
     return usersService.findAll();
   }
@@ -603,6 +607,8 @@ cache.getAllAsync();   // Promise<Record<string, CacheInfo>>
   remainingTtl: number | null; // ms until expiry, null when ttl is Infinity
   hits: number;                // times this key was served from cache
   size: number;                // approximate body size in bytes
+  staleAt?: number | null;     // when the entry went stale (staleWhileRevalidate)
+  tags?: string[];             // invalidation tags, see deleteByTag
 }
 ```
 
