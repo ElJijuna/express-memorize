@@ -3,6 +3,7 @@ import {
   MemorizeInterceptor,
   MemorizeModule,
   MemorizeNoCache,
+  MemorizeTags,
   MemorizeTtl,
 } from '../../adapters/nestjs';
 import { memorize } from '../../memorize';
@@ -220,6 +221,21 @@ describe('NestJS adapter', () => {
     subscribe(interceptor.intercept(context, { handle: () => observableOf({ data: [] }) }));
 
     expect(cache.get('users:list')).not.toBeNull();
+    expect(cache.get('/users')).toBeNull();
+  });
+
+  it('tags entries via MemorizeTags so they can be invalidated with deleteByTag', () => {
+    const cache = memorize();
+    const interceptor = new MemorizeInterceptor(cache);
+    const handler = function handler() {};
+
+    MemorizeTags('users')(handler);
+    const { context } = createContext({ handler });
+
+    subscribe(interceptor.intercept(context, { handle: () => observableOf({ data: [] }) }));
+
+    expect(cache.get('/users')?.tags).toEqual(['users']);
+    expect(cache.deleteByTag('users')).toBe(1);
     expect(cache.get('/users')).toBeNull();
   });
 

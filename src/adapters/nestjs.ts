@@ -8,6 +8,7 @@ export const MEMORIZE_MODULE_OPTIONS = Symbol('MEMORIZE_MODULE_OPTIONS');
 const CACHE_KEY_METADATA = 'express-memorize:nestjs:cache-key';
 const TTL_METADATA = 'express-memorize:nestjs:ttl';
 const NO_CACHE_METADATA = 'express-memorize:nestjs:no-cache';
+const TAGS_METADATA = 'express-memorize:nestjs:tags';
 
 type MetadataTarget = object;
 
@@ -235,6 +236,14 @@ export function MemorizeNoCache(): MethodDecorator & ClassDecorator {
 }
 
 /**
+ * Decorates a controller or handler with invalidation tags attached to every
+ * cached entry. See `deleteByTag`.
+ */
+export function MemorizeTags(...tags: string[]): MethodDecorator & ClassDecorator {
+  return createMetadataDecorator(TAGS_METADATA, tags);
+}
+
+/**
  * NestJS interceptor backed by a shared {@link Memorize} cache instance.
  *
  * Register through {@link MemorizeModule.forRoot} for dependency injection, or
@@ -269,6 +278,7 @@ export class MemorizeInterceptor {
     const metadataKey = getMetadata<string>(CACHE_KEY_METADATA, context);
     const key = metadataKey ?? this.options.key?.({ context, request }) ?? defaultKey(request);
     const ttl = getMetadata<number>(TTL_METADATA, context) ?? this.options.ttl;
+    const tags = getMetadata<string[]>(TAGS_METADATA, context);
     const cached = this.cache._store.getRaw(key);
 
     if (cached) {
@@ -286,7 +296,7 @@ export class MemorizeInterceptor {
 
       this.cache._store.set(
         key,
-        { body: value, statusCode: 200, contentType: 'application/json' },
+        { body: value, statusCode: 200, contentType: 'application/json', tags },
         ttl ?? this.cache._ttl,
       );
     });
