@@ -184,6 +184,19 @@ describe('Fastify adapter — custom key', () => {
   });
 });
 
+describe('Fastify adapter — tags', () => {
+  it('tags cached entries so routes can be invalidated with deleteByTag', async () => {
+    const cache = memorize();
+    const app = buildApp(cache, { tags: ['users'] });
+
+    await app.inject('/users');
+
+    expect(cache.get('/users')?.tags).toEqual(['users']);
+    expect(cache.deleteByTag('users')).toBe(1);
+    expect(cache.get('/users')).toBeNull();
+  });
+});
+
 describe('Fastify adapter — route-level preHandler', () => {
   it('supports route-level TTL and invalidation', async () => {
     const cache = memorize();

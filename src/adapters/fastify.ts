@@ -13,6 +13,8 @@ export interface FastifyAdapterOptions {
   noCache?: boolean;
   /** Custom cache key extractor. Defaults to `request.url`. */
   key?: (request: FastifyRequest) => string;
+  /** Invalidation tags attached to every cached entry. See `deleteByTag`. */
+  tags?: string[];
 }
 
 function serializePayload(payload: unknown): { body: unknown; contentType?: string } {
@@ -129,7 +131,11 @@ export function createFastifyPreHandler(
           serialized.contentType ??
           'application/octet-stream';
 
-        cache._store.set(key, { body: serialized.body, statusCode, contentType }, ttl);
+        cache._store.set(
+          key,
+          { body: serialized.body, statusCode, contentType, tags: options?.tags },
+          ttl,
+        );
       }
 
       reply.header('X-Cache', 'MISS');
