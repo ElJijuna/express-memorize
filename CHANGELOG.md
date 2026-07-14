@@ -1,3 +1,23 @@
+# [2.9.0](https://github.com/ElJijuna/express-memorize/compare/v2.8.0...v2.9.0) (2026-07-13)
+
+
+### Features
+
+* add deleteByTag method to remove cache entries by tags ([c90e7be](https://github.com/ElJijuna/express-memorize/commit/c90e7be219d295a2f4648434888a4344fcf95357))
+* add key/shouldCache middleware options and hit-miss stats ([d03f78b](https://github.com/ElJijuna/express-memorize/commit/d03f78b1afe92b5f58bd2eca076fd1faaaa723f6))
+* add MemorizeSetOptions interface with ttl, tags, and staleWhileRevalidate properties ([83c78b6](https://github.com/ElJijuna/express-memorize/commit/83c78b667c977bba17d2f39e964aecc8379c8c5d))
+* add off()/unsubscribe and dispose() lifecycle APIs ([4d5cc17](https://github.com/ElJijuna/express-memorize/commit/4d5cc176bdf9e139cf9493152c73b36ada635ed0))
+* add stale_at and tags columns to cache_entries table and implement migration ([e1b6774](https://github.com/ElJijuna/express-memorize/commit/e1b67748c6bc24e8cb60027038adddc68334fa61))
+* add stale_at and tags properties to StoredRow interface and trigger migration ([a6b068a](https://github.com/ElJijuna/express-memorize/commit/a6b068a197caad24bd19eebddb22d95b43c5115b))
+* add staleAt and tags properties to CacheEntry interface ([7508f00](https://github.com/ElJijuna/express-memorize/commit/7508f008f463546668b6b7f0fbc6f0b7a43cdf5f))
+* enhance event listener error handling and add tests for listener isolation ([e2e10df](https://github.com/ElJijuna/express-memorize/commit/e2e10dfad4ec76b825f710c177d00cd1be516c2f))
+* implement tag-based invalidation with deleteByTag and deleteByTagAsync methods ([13702ad](https://github.com/ElJijuna/express-memorize/commit/13702ad061ee5a93ed40539cecb006aed5dca48e))
+
+
+### Performance Improvements
+
+* replace O(n) expiry scans with a lazy min-heap scheduler ([ddc0d05](https://github.com/ElJijuna/express-memorize/commit/ddc0d05b3636fb1a3a88f42604dd73722fac4f81))
+
 # [2.8.0](https://github.com/ElJijuna/express-memorize/compare/v2.7.0...v2.8.0) (2026-07-01)
 
 
