@@ -9,6 +9,8 @@ export interface FetchAdapterOptions {
   noCache?: boolean;
   /** Custom cache key extractor. Defaults to `pathname + search`. */
   key?: (request: Request) => string;
+  /** Invalidation tags attached to every cached entry. See `deleteByTag`. */
+  tags?: string[];
 }
 
 /**
@@ -82,7 +84,11 @@ export function cacheFetchHandler(
       const body = await response.clone().text();
       const contentType = response.headers.get('Content-Type') ?? 'application/octet-stream';
 
-      cache._store.set(key, { body, statusCode: response.status, contentType }, options?.ttl);
+      cache._store.set(
+        key,
+        { body, statusCode: response.status, contentType, tags: options?.tags },
+        options?.ttl,
+      );
 
       const headers = new Headers(response.headers);
 

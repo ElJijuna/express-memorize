@@ -173,6 +173,19 @@ describe('Fetch adapter — TTL', () => {
   });
 });
 
+describe('Fetch adapter — tags', () => {
+  it('tags cached entries so routes can be invalidated with deleteByTag', async () => {
+    const cache = memorize();
+    const handler = cacheFetchHandler(cache, jsonHandler, { tags: ['users'] });
+
+    await handler(makeRequest());
+
+    expect(cache.get('/users')?.tags).toEqual(['users']);
+    expect(cache.deleteByTag('users')).toBe(1);
+    expect(cache.get('/users')).toBeNull();
+  });
+});
+
 describe('Fetch adapter — custom key', () => {
   it('uses custom key extractor', async () => {
     const cache = memorize();
