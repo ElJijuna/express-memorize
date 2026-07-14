@@ -18,6 +18,13 @@
 
 * replace O(n) expiry scans with a lazy min-heap scheduler ([ddc0d05](https://github.com/ElJijuna/express-memorize/commit/ddc0d05b3636fb1a3a88f42604dd73722fac4f81))
 
+# [2.8.0](https://github.com/ElJijuna/express-memorize/compare/v2.7.0...v2.8.0) (2026-07-01)
+
+
+### Features
+
+* add SqliteMemorizeStore for persistent caching with SQLite ([a6a92b0](https://github.com/ElJijuna/express-memorize/commit/a6a92b0613836125f0a18c7aea5abe22afb6419d))
+
 # [2.7.0](https://github.com/ElJijuna/express-memorize/compare/v2.6.0...v2.7.0) (2026-06-25)
 
 
