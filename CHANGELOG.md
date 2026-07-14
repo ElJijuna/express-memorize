@@ -1,3 +1,15 @@
+# [2.10.0](https://github.com/ElJijuna/express-memorize/compare/v2.9.0...v2.10.0) (2026-07-14)
+
+
+### Features
+
+* add llms.txt and llms-full.txt for comprehensive documentation; update workflow to copy llms.txt files to site root ([652bf78](https://github.com/ElJijuna/express-memorize/commit/652bf78c9bb678eca1d44c46b7e6cf655101f9d2))
+* add MemorizeTags decorator for tag-based cache entry invalidation ([4095585](https://github.com/ElJijuna/express-memorize/commit/4095585e44bcf6938f83f3f8f368bd69df118d46))
+* add support for tags in Fastify adapter to enable cache entry invalidation with deleteByTag ([57218be](https://github.com/ElJijuna/express-memorize/commit/57218bef1b69a542004ec7b32e8b5ac7c46c4ffb))
+* add tag support in cacheFetchHandler for cache entry invalidation ([8e0841f](https://github.com/ElJijuna/express-memorize/commit/8e0841f8291a133ec19b6a5320cd9344b591fad9))
+* add tag support in Hono adapter for cache entry invalidation ([7f9d98a](https://github.com/ElJijuna/express-memorize/commit/7f9d98a7a1566ae8ae3dfd09257f2152433c4b59))
+* add tag support in Koa adapter for cache entry invalidation ([92dddd6](https://github.com/ElJijuna/express-memorize/commit/92dddd6e57176a27f6cfeaf2678945505654d915))
+
 # [2.9.0](https://github.com/ElJijuna/express-memorize/compare/v2.8.0...v2.9.0) (2026-07-13)
 
 
