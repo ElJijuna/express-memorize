@@ -8,6 +8,8 @@ export interface KoaAdapterOptions {
   noCache?: boolean;
   /** Custom cache key extractor. Defaults to `ctx.originalUrl ?? ctx.url`. */
   key?: (ctx: Context) => string;
+  /** Invalidation tags attached to every cached entry. See `deleteByTag`. */
+  tags?: string[];
 }
 
 function defaultKey(ctx: Context): string {
@@ -88,7 +90,7 @@ export function createKoaMiddleware(cache: Memorize, options?: KoaAdapterOptions
 
       cache._store.set(
         key,
-        { body: ctx.body, statusCode: ctx.status, contentType },
+        { body: ctx.body, statusCode: ctx.status, contentType, tags: options?.tags },
         options?.ttl ?? cache._ttl,
       );
       ctx.set('X-Cache', 'MISS');

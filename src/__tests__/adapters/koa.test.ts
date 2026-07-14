@@ -251,6 +251,19 @@ describe('Koa adapter — TTL', () => {
   });
 });
 
+describe('Koa adapter — tags', () => {
+  it('tags cached entries so routes can be invalidated with deleteByTag', async () => {
+    const cache = memorize();
+    const ctx = createContext();
+
+    await createKoaMiddleware(cache, { tags: ['users'] })(ctx, async () => sendUsers(ctx));
+
+    expect(cache.get('/users')?.tags).toEqual(['users']);
+    expect(cache.deleteByTag('users')).toBe(1);
+    expect(cache.get('/users')).toBeNull();
+  });
+});
+
 describe('Koa adapter — custom key', () => {
   it('uses custom key extractor', async () => {
     const cache = memorize();
