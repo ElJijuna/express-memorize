@@ -145,6 +145,19 @@ describe('Hono adapter — custom key', () => {
   });
 });
 
+describe('Hono adapter — tags', () => {
+  it('tags cached entries so routes can be invalidated with deleteByTag', async () => {
+    const cache = memorize();
+    const app = buildApp(cache, { tags: ['users'] });
+
+    await app.request('/users');
+
+    expect(cache.get('/users')?.tags).toEqual(['users']);
+    expect(cache.deleteByTag('users')).toBe(1);
+    expect(cache.get('/users')).toBeNull();
+  });
+});
+
 describe('Hono adapter — shared store with Express adapter', () => {
   it('cache.delete() invalidates Hono-cached entries', async () => {
     const cache = memorize();

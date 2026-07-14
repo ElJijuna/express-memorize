@@ -8,6 +8,8 @@ export interface HonoCallOptions {
   noCache?: boolean;
   /** Custom cache key extractor. Defaults to `c.req.url`. */
   key?: (c: Context) => string;
+  /** Invalidation tags attached to every cached entry. See `deleteByTag`. */
+  tags?: string[];
 }
 
 /**
@@ -73,7 +75,11 @@ export function createHonoMiddleware(
       const body = await c.res.clone().text();
       const contentType = c.res.headers.get('Content-Type') ?? 'application/octet-stream';
 
-      cache._store.set(key, { body, statusCode: status, contentType }, options?.ttl);
+      cache._store.set(
+        key,
+        { body, statusCode: status, contentType, tags: options?.tags },
+        options?.ttl,
+      );
 
       const headers = new Headers(c.res.headers);
 
