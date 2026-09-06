@@ -1,3 +1,10 @@
+# [2.11.0](https://github.com/ElJijuna/express-memorize/compare/v2.10.0...v2.11.0) (2026-09-06)
+
+
+### Features
+
+* enhance cache entry handling and integrity tests; improve TTL normalization and property definitions ([371e2b9](https://github.com/ElJijuna/express-memorize/commit/371e2b933881afc3e9ab9a668f6c3794d90b7b7d))
+
 # [2.10.0](https://github.com/ElJijuna/express-memorize/compare/v2.9.0...v2.10.0) (2026-07-14)
 
 
