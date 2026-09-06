@@ -238,6 +238,7 @@ export class SqliteMemorizeStore implements MemorizeStoreLike {
       return;
     }
 
+    const { expiresAt } = normalizeTtl(ttl);
     const removed = this._deleteRow(key);
 
     if (this._maxEntries && this._countRows() >= this._maxEntries) {
@@ -252,7 +253,6 @@ export class SqliteMemorizeStore implements MemorizeStoreLike {
       this._evictLRU();
     }
 
-    const { expiresAt } = normalizeTtl(ttl);
     const encoded = encodeBody(entry.body);
 
     this._prepare(
@@ -310,7 +310,12 @@ export class SqliteMemorizeStore implements MemorizeStoreLike {
       const stored = row as StoredRow;
       const entry = this._rowToEntry(stored);
 
-      result[stored.key] = this._format(stored.key, entry);
+      Object.defineProperty(result, stored.key, {
+        value: this._format(stored.key, entry),
+        enumerable: true,
+        configurable: true,
+        writable: true,
+      });
     }
 
     return result;
@@ -332,7 +337,12 @@ export class SqliteMemorizeStore implements MemorizeStoreLike {
       } else {
         const entry = this._rowToEntry(stored);
 
-        result[stored.key] = this._format(stored.key, entry);
+        Object.defineProperty(result, stored.key, {
+          value: this._format(stored.key, entry),
+          enumerable: true,
+          configurable: true,
+          writable: true,
+        });
       }
 
       scanned++;

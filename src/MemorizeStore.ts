@@ -199,6 +199,7 @@ export class MemorizeStore implements MemorizeStoreLike {
       return;
     }
 
+    const { expiresAt } = normalizeTtl(ttl);
     const removed = existing ? this._removeStoredEntry(key) : null;
 
     if (this._maxEntries && this._store.size >= this._maxEntries) {
@@ -213,7 +214,6 @@ export class MemorizeStore implements MemorizeStoreLike {
       this._evictLRU();
     }
 
-    const { expiresAt } = normalizeTtl(ttl);
     const stored: CacheEntry = { ...entry, expiresAt, hits: 1, size };
 
     this._store.set(key, stored);
@@ -281,7 +281,12 @@ export class MemorizeStore implements MemorizeStoreLike {
         continue;
       }
 
-      result[key] = this._format(key, entry);
+      Object.defineProperty(result, key, {
+        value: this._format(key, entry),
+        enumerable: true,
+        configurable: true,
+        writable: true,
+      });
     }
 
     if (expired) {
@@ -309,7 +314,12 @@ export class MemorizeStore implements MemorizeStoreLike {
       if (entry.expiresAt && Date.now() >= entry.expiresAt) {
         expired = this._evictExpiredEntry(key) || expired;
       } else {
-        result[key] = this._format(key, entry);
+        Object.defineProperty(result, key, {
+          value: this._format(key, entry),
+          enumerable: true,
+          configurable: true,
+          writable: true,
+        });
       }
 
       scanned++;

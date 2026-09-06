@@ -422,10 +422,16 @@ export function memorize(options: MemorizeOptions = {}): Memorize {
       return inFlight as Promise<T>;
     }
 
+    const capturedVersion = keyVersions.get(key) ?? 0;
+    const capturedEpoch = mutationEpoch;
     const promise = (async () => {
       const value = await factory();
 
-      await cache.setAsync(key, value, options);
+      // A mutation while the factory runs takes precedence over this result.
+      // setAsync guards any subsequent mutation during serialization.
+      if ((keyVersions.get(key) ?? 0) === capturedVersion && mutationEpoch === capturedEpoch) {
+        await cache.setAsync(key, value, options);
+      }
 
       return value;
     })();
