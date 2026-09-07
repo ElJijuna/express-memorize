@@ -1,3 +1,10 @@
+# [2.12.0](https://github.com/ElJijuna/express-memorize/compare/v2.11.0...v2.12.0) (2026-09-07)
+
+
+### Features
+
+* add inspectAsync method for paginated cache metadata retrieval; includes validation and testing ([e250d25](https://github.com/ElJijuna/express-memorize/commit/e250d25ec5f1637e0c5bc9579fc24a9bd777027e))
+
 # [2.11.0](https://github.com/ElJijuna/express-memorize/compare/v2.10.0...v2.11.0) (2026-09-06)
 
 
