@@ -489,10 +489,27 @@ describe('SQLite storage', () => {
       expect(cache._store.get('/expired')).toBeNull();
     });
 
+    it('inspectAsync returns paginated metadata without loading bodies', async () => {
+      const cache = memorize({ storage: { type: 'sqlite', directory } });
+
+      cache._store.set('/a', { body: 'secret-a', statusCode: 200, contentType: 'text/plain' });
+      cache._store.set('/b', { body: 'secret-b', statusCode: 201, contentType: 'text/plain' });
+
+      const first = await cache.inspectAsync({ limit: 1 });
+      const second = await cache.inspectAsync({ offset: first.nextOffset ?? 0, limit: 1 });
+
+      expect(first.entries[0]).toMatchObject({ key: '/a', statusCode: 200 });
+      expect(first.entries[0]).not.toHaveProperty('body');
+      expect(first.nextOffset).toBe(1);
+      expect(second.entries[0]).toMatchObject({ key: '/b', statusCode: 201 });
+      expect(second.nextOffset).toBeNull();
+    });
+
     it('validates async batch sizes', async () => {
       const cache = memorize({ storage: { type: 'sqlite', directory } });
 
       await expect(cache.getAllAsync({ batchSize: 0 })).rejects.toThrow(RangeError);
+      await expect(cache.inspectAsync({ limit: 0 })).rejects.toThrow(RangeError);
       await expect(cache.clearAsync({ batchSize: 0 })).rejects.toThrow(RangeError);
       await expect(cache.deleteMatchingAsync('/api/*', { batchSize: 0 })).rejects.toThrow(
         RangeError,

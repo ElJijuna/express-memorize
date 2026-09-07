@@ -8,9 +8,19 @@ import type { MemorizeEvent } from './domain/MemorizeEvent';
 import { MemorizeEventType } from './domain/MemorizeEventType';
 import type { MemorizeEvictEvent } from './domain/MemorizeEvictEvent';
 import type { MemorizeExpireEvent } from './domain/MemorizeExpireEvent';
+import type {
+  MemorizeEntryMetadata,
+  MemorizeInspectionOptions,
+  MemorizeInspectionPage,
+} from './domain/MemorizeInspection';
 import type { MemorizeSetEvent } from './domain/MemorizeSetEvent';
 import type { MemorizeStats } from './domain/MemorizeStats';
-import { normalizeBatchSize, normalizeByteLimit, normalizeTtl } from './MemorizeStore';
+import {
+  normalizeBatchSize,
+  normalizeByteLimit,
+  normalizeInspectionOptions,
+  normalizeTtl,
+} from './MemorizeStore';
 import type { MemorizeStoreLike, MemorizeStoreOptions, StoreEntryInput } from './MemorizeStoreLike';
 import { estimateByteSize } from './utils/byteSize';
 import { yieldToEventLoop } from './utils/eventLoop';
@@ -58,6 +68,8 @@ interface StoredRow {
   stale_at: number | null;
   tags: string | null;
 }
+
+type MetadataRow = Omit<StoredRow, 'body' | 'body_encoding'>;
 
 export const SQLITE_STORAGE_WARNING =
   '[express-memorize] SQLite storage requires Node.js 24 or newer. Falling back to in-memory storage.';
@@ -357,6 +369,47 @@ export class SqliteMemorizeStore implements MemorizeStoreLike {
     }
 
     return result;
+  }
+
+  async inspectAsync(options?: MemorizeInspectionOptions): Promise<MemorizeInspectionPage> {
+    const { batchSize, limit, offset } = normalizeInspectionOptions(options);
+    const rows = this._prepare(`
+      SELECT key, status_code, content_type, expires_at, hits, size,
+             last_accessed, stale_at, tags
+      FROM cache_entries
+      WHERE expires_at IS NULL OR expires_at > ?
+      ORDER BY last_accessed ASC
+      LIMIT ? OFFSET ?
+    `).all(Date.now(), limit + 1, offset) as MetadataRow[];
+    const entries: MemorizeEntryMetadata[] = [];
+
+    for (let index = 0; index < rows.length; index++) {
+      const row = rows[index];
+
+      entries.push({
+        key: row.key,
+        statusCode: row.status_code,
+        contentType: row.content_type,
+        expiresAt: row.expires_at,
+        hits: row.hits,
+        size: row.size,
+        staleAt: row.stale_at ?? null,
+        tags: row.tags ? (JSON.parse(row.tags) as string[]) : undefined,
+        remainingTtl: row.expires_at ? Math.max(0, row.expires_at - Date.now()) : null,
+      });
+
+      if ((index + 1) % batchSize === 0) {
+        await yieldToEventLoop();
+      }
+    }
+
+    const hasMore = entries.length > limit;
+
+    if (hasMore) {
+      entries.pop();
+    }
+
+    return { entries, nextOffset: hasMore ? offset + limit : null };
   }
 
   delete(key: string): boolean {

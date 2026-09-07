@@ -9,6 +9,11 @@ export type { MemorizeEvent } from './MemorizeEvent';
 export { MemorizeEventType } from './MemorizeEventType';
 export type { MemorizeEvictEvent } from './MemorizeEvictEvent';
 export type { MemorizeExpireEvent } from './MemorizeExpireEvent';
+export type {
+  MemorizeEntryMetadata,
+  MemorizeInspectionOptions,
+  MemorizeInspectionPage,
+} from './MemorizeInspection';
 export type { MemorizeOptions } from './MemorizeOptions';
 export type { MemorizeSetEvent } from './MemorizeSetEvent';
 export type { MemorizeStats } from './MemorizeStats';

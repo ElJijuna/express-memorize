@@ -232,6 +232,21 @@ describe('memorize middleware', () => {
       expect(cache.getValue('/b')).toBe('b');
     });
 
+    it('cache.inspectAsync exposes bounded metadata without cached values', async () => {
+      const cache = memorize();
+
+      cache.set('/a', { private: 'a' });
+      cache.set('/b', { private: 'b' });
+
+      const page = await cache.inspectAsync({ limit: 1 });
+
+      expect(page.entries).toEqual([
+        expect.objectContaining({ key: '/a', size: expect.any(Number) }),
+      ]);
+      expect(page.entries[0]).not.toHaveProperty('body');
+      expect(page.nextOffset).toBe(1);
+    });
+
     it('cache.clear removes all entries', () => {
       const cache = memorize();
       const middleware = cache();

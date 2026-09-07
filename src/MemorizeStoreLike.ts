@@ -6,6 +6,10 @@ import type { MemorizeEmptyEvent } from './domain/MemorizeEmptyEvent';
 import type { MemorizeEventType } from './domain/MemorizeEventType';
 import type { MemorizeEvictEvent } from './domain/MemorizeEvictEvent';
 import type { MemorizeExpireEvent } from './domain/MemorizeExpireEvent';
+import type {
+  MemorizeInspectionOptions,
+  MemorizeInspectionPage,
+} from './domain/MemorizeInspection';
 import type { MemorizeSetEvent } from './domain/MemorizeSetEvent';
 import type { MemorizeStats } from './domain/MemorizeStats';
 
@@ -37,6 +41,8 @@ export interface MemorizeStoreLike {
   get(key: string): CacheInfo | null;
   getAll(): Record<string, CacheInfo>;
   getAllAsync(options?: MemorizeBatchOptions): Promise<Record<string, CacheInfo>>;
+  /** Optional for backwards compatibility with custom stores. */
+  inspectAsync?(options?: MemorizeInspectionOptions): Promise<MemorizeInspectionPage>;
   delete(key: string): boolean;
   deleteByTag(tag: string | string[]): number;
   deleteByTagAsync(tag: string | string[], options?: MemorizeBatchOptions): Promise<number>;

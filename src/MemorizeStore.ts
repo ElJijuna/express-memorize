@@ -8,6 +8,11 @@ import type { MemorizeEvent } from './domain/MemorizeEvent';
 import { MemorizeEventType } from './domain/MemorizeEventType';
 import type { MemorizeEvictEvent } from './domain/MemorizeEvictEvent';
 import type { MemorizeExpireEvent } from './domain/MemorizeExpireEvent';
+import type {
+  MemorizeEntryMetadata,
+  MemorizeInspectionOptions,
+  MemorizeInspectionPage,
+} from './domain/MemorizeInspection';
 import type { MemorizeSetEvent } from './domain/MemorizeSetEvent';
 import type { MemorizeStats } from './domain/MemorizeStats';
 import type { MemorizeStoreLike, MemorizeStoreOptions, StoreEntryInput } from './MemorizeStoreLike';
@@ -40,6 +45,8 @@ type ListenerMap = {
 export const DEFAULT_TTL = 60_000;
 
 const DEFAULT_BATCH_SIZE = 1_000;
+const DEFAULT_INSPECTION_LIMIT = 100;
+const MAX_INSPECTION_LIMIT = 1_000;
 
 export function normalizeTtl(ttl?: number | null): { expiresAt: number | null } {
   if (ttl === Infinity) {
@@ -71,6 +78,26 @@ export function normalizeBatchSize(options?: MemorizeBatchOptions): number {
   }
 
   return batchSize;
+}
+
+export function normalizeInspectionOptions(options?: MemorizeInspectionOptions): {
+  batchSize: number;
+  limit: number;
+  offset: number;
+} {
+  const batchSize = normalizeBatchSize(options);
+  const limit = options?.limit ?? DEFAULT_INSPECTION_LIMIT;
+  const offset = options?.offset ?? 0;
+
+  if (!Number.isInteger(limit) || limit <= 0 || limit > MAX_INSPECTION_LIMIT) {
+    throw new RangeError(`limit must be a positive integer up to ${MAX_INSPECTION_LIMIT}`);
+  }
+
+  if (!Number.isInteger(offset) || offset < 0) {
+    throw new RangeError('offset must be a non-negative integer');
+  }
+
+  return { batchSize, limit, offset };
 }
 
 export function normalizeByteLimit(name: string, value: number | undefined): number | undefined {
@@ -334,6 +361,49 @@ export class MemorizeStore implements MemorizeStoreLike {
     }
 
     return result;
+  }
+
+  /**
+   * Returns a bounded page of entry metadata without copying cached bodies or
+   * changing LRU order and lookup statistics. Yields between scan batches.
+   */
+  async inspectAsync(options?: MemorizeInspectionOptions): Promise<MemorizeInspectionPage> {
+    const { batchSize, limit, offset } = normalizeInspectionOptions(options);
+    const entries: MemorizeEntryMetadata[] = [];
+
+    let active = 0;
+    let scanned = 0;
+    let expired = false;
+
+    for (const [key, entry] of this._store) {
+      if (entry.expiresAt && Date.now() >= entry.expiresAt) {
+        expired = this._evictExpiredEntry(key) || expired;
+      } else if (active++ >= offset) {
+        entries.push(this._formatMetadata(key, entry));
+
+        if (entries.length > limit) {
+          break;
+        }
+      }
+
+      scanned++;
+
+      if (scanned % batchSize === 0) {
+        await yieldToEventLoop();
+      }
+    }
+
+    if (expired) {
+      this._scheduleNextExpiry();
+    }
+
+    const hasMore = entries.length > limit;
+
+    if (hasMore) {
+      entries.pop();
+    }
+
+    return { entries, nextOffset: hasMore ? offset + limit : null };
   }
 
   /**
@@ -801,6 +871,20 @@ export class MemorizeStore implements MemorizeStoreLike {
     return {
       key,
       body: entry.body,
+      statusCode: entry.statusCode,
+      contentType: entry.contentType,
+      expiresAt: entry.expiresAt,
+      hits: entry.hits,
+      size: entry.size,
+      staleAt: entry.staleAt ?? null,
+      tags: entry.tags,
+      remainingTtl: entry.expiresAt ? Math.max(0, entry.expiresAt - Date.now()) : null,
+    };
+  }
+
+  private _formatMetadata(key: string, entry: CacheEntry): MemorizeEntryMetadata {
+    return {
+      key,
       statusCode: entry.statusCode,
       contentType: entry.contentType,
       expiresAt: entry.expiresAt,

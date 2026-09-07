@@ -593,6 +593,18 @@ SQLite storage requires Node.js 24 or newer. If configured on an older runtime,
 cache.get('/users');   // CacheInfo | null
 cache.getAll();        // Record<string, CacheInfo>
 cache.getAllAsync();   // Promise<Record<string, CacheInfo>>
+await cache.inspectAsync({ offset: 0, limit: 100 }); // metadata page, no bodies
+```
+
+`inspectAsync()` is intended for dashboards and monitoring endpoints. It returns
+only entry metadata, is paginated, yields during in-memory scans, and does not
+change LRU order or hit/miss counters:
+
+```typescript
+app.get('/internal/cache', async (req, res) => {
+  const offset = Number(req.query.offset ?? 0);
+  res.json(await cache.inspectAsync({ offset, limit: 100, batchSize: 500 }));
+});
 ```
 
 `CacheInfo` shape:
@@ -703,6 +715,7 @@ discarded instead of overwriting newer state.
 | `get` | `(key) => CacheInfo \| null` | Returns info for a cached key. |
 | `getAll` | `() => Record<string, CacheInfo>` | Returns all active entries. |
 | `getAllAsync` | `({ batchSize }?) => Promise<Record<string, CacheInfo>>` | Async batched variant of `getAll`. |
+| `inspectAsync` | `({ offset, limit, batchSize }?) => Promise<MemorizeInspectionPage>` | Paginated metadata for dashboards; excludes bodies and does not count as a lookup. |
 | `delete` | `(key) => boolean` | Removes a single entry. |
 | `deleteByTag` | `(tag) => number` | Removes entries carrying a tag (or any of a list of tags). |
 | `deleteByTagAsync` | `(tag, { batchSize }?) => Promise<number>` | Async batched variant of `deleteByTag`. |

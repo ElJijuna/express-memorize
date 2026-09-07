@@ -4,7 +4,7 @@ import type { CacheEntry } from './domain/CacheEntry';
 import type { DeleteMatchingOptions, Memorize, MemorizeSetOptions } from './domain/Memorize';
 import type { MemorizeCallOptions } from './domain/MemorizeCallOptions';
 import type { MemorizeOptions, MemorizeStorageOptions } from './domain/MemorizeOptions';
-import { DEFAULT_TTL, MemorizeStore } from './MemorizeStore';
+import { DEFAULT_TTL, MemorizeStore, normalizeInspectionOptions } from './MemorizeStore';
 import type { MemorizeStoreLike, MemorizeStoreOptions } from './MemorizeStoreLike';
 import {
   canUseNativeSqlite,
@@ -450,6 +450,30 @@ export function memorize(options: MemorizeOptions = {}): Memorize {
   cache.get = (key: string) => store.get(key);
   cache.getAll = () => store.getAll();
   cache.getAllAsync = (batchOptions) => store.getAllAsync(batchOptions);
+
+  cache.inspectAsync = async (inspectionOptions) => {
+    if (store.inspectAsync) {
+      return store.inspectAsync(inspectionOptions);
+    }
+
+    const { offset, limit } = normalizeInspectionOptions(inspectionOptions);
+    const batchOptions = { batchSize: inspectionOptions?.batchSize };
+    const all = Object.values(await store.getAllAsync(batchOptions));
+    const entries = all.slice(offset, offset + limit + 1).map((entry) => {
+      const metadata = { ...entry };
+
+      delete (metadata as Partial<typeof entry>).body;
+
+      return metadata;
+    });
+    const hasMore = entries.length > limit;
+
+    if (hasMore) {
+      entries.pop();
+    }
+
+    return { entries, nextOffset: hasMore ? offset + limit : null };
+  };
 
   cache.delete = (key: string) => {
     nextVersion(keyVersions, key);

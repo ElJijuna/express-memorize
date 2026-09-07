@@ -3,9 +3,12 @@ export type {
   CacheInfo,
   MemorizeDeleteEvent,
   MemorizeEmptyEvent,
+  MemorizeEntryMetadata,
   MemorizeEvent,
   MemorizeEvictEvent,
   MemorizeExpireEvent,
+  MemorizeInspectionOptions,
+  MemorizeInspectionPage,
   MemorizeSetEvent,
   MemorizeStats,
 } from './domain/index';

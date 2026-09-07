@@ -3,6 +3,7 @@ import type { MemorizeStoreLike } from '../MemorizeStoreLike';
 import type { CacheInfo } from './CacheInfo';
 import type { MemorizeBatchOptions } from './MemorizeBatchOptions';
 import type { MemorizeCallOptions } from './MemorizeCallOptions';
+import type { MemorizeInspectionOptions, MemorizeInspectionPage } from './MemorizeInspection';
 
 export interface DeleteMatchingOptions {
   /** When `true`, only the exact key is deleted (no child keys). Default `false`. */
@@ -236,6 +237,17 @@ export interface Memorize {
    * ```
    */
   getAllAsync(options?: MemorizeBatchOptions): Promise<Record<string, CacheInfo>>;
+
+  /**
+   * Returns a paginated list of cache metadata without cached bodies. The scan
+   * yields between batches and does not affect LRU order, hits, or misses.
+   *
+   * @example
+   * ```ts
+   * const page = await cache.inspectAsync({ offset: 0, limit: 100, batchSize: 500 });
+   * ```
+   */
+  inspectAsync(options?: MemorizeInspectionOptions): Promise<MemorizeInspectionPage>;
 
   /**
    * Removes a single entry from the cache and emits a {@link MemorizeEventType.Delete} event.

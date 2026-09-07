@@ -163,6 +163,45 @@ describe('MemorizeStore', () => {
       await expect(store.getAllAsync({ batchSize: 0 })).rejects.toThrow(RangeError);
     });
 
+    it('inspectAsync returns paginated metadata without bodies', async () => {
+      store.set('/a', entry('secret-a'));
+      store.set('/b', entry('secret-b'));
+      store.set('/c', entry('secret-c'));
+
+      const first = await store.inspectAsync({ limit: 2, batchSize: 1 });
+      const second = await store.inspectAsync({ offset: first.nextOffset ?? 0, limit: 2 });
+
+      expect(first.entries.map(({ key }) => key)).toEqual(['/a', '/b']);
+      expect(first.entries[0]).not.toHaveProperty('body');
+      expect(first.nextOffset).toBe(2);
+      expect(second.entries.map(({ key }) => key)).toEqual(['/c']);
+      expect(second.nextOffset).toBeNull();
+    });
+
+    it('inspectAsync does not change LRU order or lookup statistics', async () => {
+      const limitedStore = new MemorizeStore({ maxEntries: 2 });
+
+      limitedStore.set('/a', entry());
+      limitedStore.set('/b', entry());
+      const statsBefore = limitedStore.getStats();
+
+      await limitedStore.inspectAsync();
+      limitedStore.set('/c', entry());
+
+      expect(limitedStore.getStats()).toMatchObject({
+        hits: statsBefore.hits,
+        misses: statsBefore.misses,
+      });
+      expect(limitedStore.get('/a')).toBeNull();
+      expect(limitedStore.get('/b')).not.toBeNull();
+    });
+
+    it('inspectAsync validates pagination options', async () => {
+      await expect(store.inspectAsync({ limit: 0 })).rejects.toThrow(RangeError);
+      await expect(store.inspectAsync({ limit: 1001 })).rejects.toThrow(RangeError);
+      await expect(store.inspectAsync({ offset: -1 })).rejects.toThrow(RangeError);
+    });
+
     it('normalizes byte limits', () => {
       expect(normalizeByteLimit('limit', undefined)).toBeUndefined();
       expect(normalizeByteLimit('limit', 10)).toBe(10);
